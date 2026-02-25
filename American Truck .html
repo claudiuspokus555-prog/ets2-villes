@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATS — American Truck Simulator Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg:#080c10; --panel:#0d1520; --border:#162030; --text:#d0e0f0; --dim:#486070; --accent:#e05020; }
+body { background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+header { background:var(--panel); border-bottom:2px solid #1a3040; padding:7px 13px; display:flex; gap:9px; align-items:center; flex-wrap:wrap; flex-shrink:0; z-index:20; }
+.logo { font-size:1.3rem; font-weight:700; letter-spacing:3px; color:var(--accent); text-shadow:0 0 15px rgba(224,80,32,.5); white-space:nowrap; }
+.logo span { color:var(--text); }
+.search-wrap { position:relative; }
+#searchBox { background:var(--bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; font-family:'Share Tech Mono',monospace; font-size:.8rem; outline:none; width:210px; }
+#searchBox:focus { border-color:var(--accent); }
+#searchResults { position:absolute; top:30px; left:0; background:var(--panel); border:1px solid var(--accent); max-height:280px; overflow-y:auto; z-index:200; display:none; font-family:'Share Tech Mono',monospace; font-size:.78rem; min-width:280px; }
+.sr-item { padding:5px 10px; cursor:pointer; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:flex-start; }
+.sr-item:hover { background:#162030; }
+.sr-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.sr-main { display:flex; flex-direction:column; }
+.sr-name { color:var(--text); font-size:.85rem; font-family:'Rajdhani',sans-serif; font-weight:600; }
+.sr-meta { color:var(--dim); font-size:.68rem; }
+.legend-wrap { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; font-family:'Share Tech Mono',monospace; font-size:.68rem; }
+.leg { display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 4px; border:1px solid transparent; user-select:none; transition:border-color .2s; }
+.leg:hover { border-color:var(--border); }
+.leg.off { opacity:.3; }
+.leg-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.options { display:flex; gap:6px; align-items:center; }
+.opt-btn { background:var(--panel); border:1px solid var(--border); color:var(--text); padding:3px 8px; font-family:'Share Tech Mono',monospace; font-size:.68rem; cursor:pointer; transition:border-color .2s,color .2s; white-space:nowrap; }
+.opt-btn:hover,.opt-btn.active { border-color:var(--accent); color:var(--accent); }
+.zoom-wrap { display:flex; gap:3px; margin-left:auto; }
+.zb { background:var(--panel); border:1px solid var(--border); color:var(--text); width:26px; height:26px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; transition:border-color .2s,color .2s; }
+.zb:hover { border-color:var(--accent); color:var(--accent); }
+.zb.wide { width:42px; font-size:.62rem; font-family:'Share Tech Mono',monospace; }
+#counter { font-family:'Share Tech Mono',monospace; font-size:.7rem; color:var(--dim); white-space:nowrap; }
+.map-area { flex:1; overflow:hidden; cursor:grab; position:relative; }
+.map-area.drag { cursor:grabbing; }
+svg#map { width:100%; height:100%; display:block; }
+.state-shape { transition:fill .2s; }
+.state-shape:hover { fill-opacity:.2 !important; }
+.city-g { cursor:pointer; }
+.city-g:hover .cdot { filter:brightness(2); }
+.cdot { }
+.clabel { font-family:'Rajdhani',sans-serif; font-weight:600; pointer-events:none; paint-order:stroke fill; }
+.state-label { pointer-events:none; font-family:'Rajdhani',sans-serif; font-weight:700; fill:rgba(255,255,255,0.5); paint-order:stroke fill; text-anchor:middle; dominant-baseline:middle; letter-spacing:1px; }
+.tooltip { position:absolute; background:var(--panel); border:1px solid var(--accent); padding:7px 12px; font-family:'Share Tech Mono',monospace; font-size:.76rem; pointer-events:none; display:none; z-index:100; max-width:240px; box-shadow:0 0 20px rgba(224,80,32,.2); line-height:1.7; }
+.tt-name { font-family:'Rajdhani',sans-serif; font-size:1.1rem; font-weight:700; }
+.tt-state { font-size:.8rem; color:#8ab0c8; }
+.tt-dlc { font-size:.68rem; }
+.infobar { padding:4px 13px; background:var(--panel); border-top:1px solid var(--border); font-family:'Share Tech Mono',monospace; font-size:.66rem; color:var(--dim); display:flex; gap:14px; flex-shrink:0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ATS <span>MAP</span> <span style="font-size:.75rem;color:#5a8090">🇺🇸</span></div>
+  <div class="search-wrap">
+    <input id="searchBox" type="text" placeholder="🔍 Rechercher une ville..." autocomplete="off"/>
+    <div id="searchResults"></div>
+  </div>
+  <div class="legend-wrap" id="legend"></div>
+  <div class="options">
+    <button class="opt-btn active" id="btnBorders">🗺 États</button>
+    <button class="opt-btn active" id="btnStateNames">🏳 Noms</button>
+  </div>
+  <div class="zoom-wrap">
+    <button class="zb" id="zIn">+</button>
+    <button class="zb" id="zOut">−</button>
+    <button class="zb wide" id="zReset">Reset</button>
+  </div>
+  <div id="counter"></div>
+</header>
+<div class="map-area" id="mapArea"><svg id="map"></svg></div>
+<div class="tooltip" id="tooltip"></div>
+<div class="infobar">
+  <span>🖱 Scroll=zoom · Drag=déplacer · Clic=infos ville</span>
+  <span id="zlevel">Zoom: 1.0×</span>
+  <span>ATS v1.57 · 265 villes · 19 États</span>
+</div>
+
+<script>
+// ============================================================
+// DLC / STATES COLORS
+// ============================================================
+const DLC = {
+  base:      {label:'Base (CA + NV)',  color:'#e05020'},
+  arizona:   {label:'Arizona',         color:'#e08030'},
+  newmexico: {label:'New Mexico',      color:'#d4a020'},
+  oregon:    {label:'Oregon',          color:'#50b860'},
+  washington:{label:'Washington',      color:'#40c0a0'},
+  utah:      {label:'Utah',            color:'#c060c0'},
+  idaho:     {label:'Idaho',           color:'#6090e0'},
+  colorado:  {label:'Colorado',        color:'#e06060'},
+  wyoming:   {label:'Wyoming',         color:'#80c0e0'},
+  montana:   {label:'Montana',         color:'#a0d080'},
+  texas:     {label:'Texas',           color:'#e0c040'},
+  oklahoma:  {label:'Oklahoma',        color:'#e07040'},
+  kansas:    {label:'Kansas',          color:'#c0a060'},
+  nebraska:  {label:'Nebraska',        color:'#90c860'},
+  arkansas:  {label:'Arkansas',        color:'#50d8a0'},
+  missouri:  {label:'Missouri',        color:'#a060e0'},
+  iowa:      {label:'Iowa',            color:'#60c8d0'},
+  louisiana: {label:'Louisiana',       color:'#e050a0'},
+};
+
+// ============================================================
+// STATE BORDER POLYGONS  [lon, lat]
+// Simplified but accurate outlines
+// ============================================================
+const STATES = {
+  "California": {
+    lLat:37.5, lLon:-119.5,
+    polys:[[
+      [-124.2,42.0],[-124.5,40.5],[-124.3,38.0],[-122.4,37.5],[-120.5,34.5],[-117.5,32.5],
+      [-117.1,32.5],[-114.7,32.7],[-114.6,34.9],[-114.1,35.1],[-114.6,35.8],[-115.9,35.6],
+      [-117.0,37.0],[-118.4,37.0],[-120.0,39.0],[-121.5,39.8],[-122.0,38.7],[-123.0,38.8],
+      [-123.8,39.8],[-124.2,41.0],[-124.2,42.0]
+    ]]
+  },
+  "Nevada": {
+    lLat:39.5, lLon:-117.0,
+    polys:[[
+      [-120.0,42.0],[-114.0,42.0],[-114.0,37.0],[-114.7,36.0],[-114.1,35.1],[-114.6,34.9],
+      [-114.7,32.7],[-117.0,32.5],[-117.5,34.0],[-117.0,37.0],[-118.4,37.0],[-120.0,39.0],[-120.0,42.0]
+    ]]
+  },
+  "Arizona": {
+    lLat:34.3, lLon:-111.7,
+    polys:[[
+      [-114.7,37.0],[-111.0,37.0],[-109.0,37.0],[-109.0,31.3],[-111.1,31.3],[-114.8,32.5],
+      [-114.7,34.9],[-114.1,35.1],[-114.6,35.8],[-114.7,37.0]
+    ]]
+  },
+  "New Mexico": {
+    lLat:34.5, lLon:-106.0,
+    polys:[[
+      [-109.0,37.0],[-103.0,37.0],[-103.0,36.5],[-103.0,32.0],[-106.6,32.0],[-108.2,31.3],
+      [-109.0,31.3],[-109.0,37.0]
+    ]]
+  },
+  "Oregon": {
+    lLat:44.0, lLon:-120.5,
+    polys:[[
+      [-124.6,46.2],[-123.7,46.2],[-122.8,45.6],[-122.2,45.5],[-119.9,45.9],[-117.0,45.9],
+      [-116.5,45.5],[-116.9,44.2],[-117.2,44.0],[-117.0,43.8],[-117.0,42.0],[-120.0,42.0],
+      [-124.2,42.0],[-124.5,43.0],[-124.6,46.2]
+    ]]
+  },
+  "Washington": {
+    lLat:47.4, lLon:-120.5,
+    polys:[[
+      [-124.7,48.4],[-122.9,49.0],[-117.0,49.0],[-117.0,46.0],[-119.9,45.9],[-122.2,45.5],
+      [-122.8,45.6],[-123.7,46.2],[-124.6,46.2],[-124.7,47.5],[-124.7,48.4]
+    ]]
+  },
+  "Idaho": {
+    lLat:44.5, lLon:-114.5,
+    polys:[[
+      [-117.0,49.0],[-111.0,49.0],[-111.0,44.5],[-112.5,44.5],[-113.0,43.0],[-117.0,43.8],
+      [-117.2,44.0],[-116.9,44.2],[-116.5,45.5],[-117.0,45.9],[-117.0,49.0]
+    ]]
+  },
+  "Utah": {
+    lLat:39.5, lLon:-111.5,
+    polys:[[
+      [-114.0,42.0],[-111.0,42.0],[-111.0,41.0],[-109.0,41.0],[-109.0,37.0],[-114.0,37.0],[-114.0,42.0]
+    ]]
+  },
+  "Colorado": {
+    lLat:39.0, lLon:-105.5,
+    polys:[[
+      [-109.0,41.0],[-102.0,41.0],[-102.0,37.0],[-109.0,37.0],[-109.0,41.0]
+    ]]
+  },
+  "Wyoming": {
+    lLat:43.0, lLon:-107.5,
+    polys:[[
+      [-111.0,45.0],[-104.0,45.0],[-104.0,41.0],[-111.0,41.0],[-111.0,45.0]
+    ]]
+  },
+  "Montana": {
+    lLat:47.0, lLon:-110.0,
+    polys:[[
+      [-116.0,49.0],[-104.0,49.0],[-104.0,45.0],[-111.0,45.0],[-116.0,49.0]
+    ]]
+  },
+  "Texas": {
+    lLat:31.5, lLon:-99.5,
+    polys:[[
+      [-103.0,37.0],[-103.0,32.0],[-106.6,32.0],[-106.5,31.8],[-104.5,29.7],
+      [-104.0,29.3],[-102.8,29.5],[-101.5,29.7],[-100.0,28.2],[-99.2,26.4],[-97.4,26.0],
+      [-97.0,26.2],[-97.5,28.0],[-96.4,28.4],[-94.7,29.0],[-94.0,29.7],[-93.8,30.0],
+      [-94.0,33.5],[-94.5,33.7],[-94.0,36.5],[-100.0,36.5],[-100.0,34.0],[-102.0,36.5],
+      [-103.0,37.0]
+    ]]
+  },
+  "Oklahoma": {
+    lLat:35.5, lLon:-97.5,
+    polys:[[
+      [-103.0,37.0],[-94.5,37.0],[-94.0,36.5],[-94.5,33.7],[-94.0,33.5],[-100.0,33.4],
+      [-100.0,36.5],[-102.0,36.5],[-103.0,37.0]
+    ]]
+  },
+  "Kansas": {
+    lLat:38.5, lLon:-98.5,
+    polys:[[
+      [-102.0,40.0],[-102.0,37.0],[-94.6,37.0],[-94.6,39.1],[-95.3,39.9],[-95.7,39.9],
+      [-102.0,40.0]
+    ]]
+  },
+  "Nebraska": {
+    lLat:41.5, lLon:-99.5,
+    polys:[[
+      [-104.0,43.0],[-104.0,41.0],[-102.0,41.0],[-102.0,40.0],[-95.7,39.9],[-95.3,39.9],
+      [-95.3,42.5],[-96.0,42.7],[-97.5,42.8],[-104.0,43.0]
+    ]]
+  },
+  "Arkansas": {
+    lLat:34.8, lLon:-92.5,
+    polys:[[
+      [-94.5,36.5],[-89.7,36.5],[-89.5,36.0],[-90.1,35.0],[-90.3,34.7],[-90.0,34.0],
+      [-91.0,33.0],[-94.0,33.0],[-94.0,33.5],[-94.5,33.7],[-94.5,36.5]
+    ]]
+  },
+  "Missouri": {
+    lLat:38.3, lLon:-92.5,
+    polys:[[
+      [-95.7,40.6],[-94.6,40.6],[-94.5,36.5],[-89.5,36.5],[-89.5,36.9],[-88.8,37.0],
+      [-88.5,38.0],[-89.0,38.9],[-90.4,38.9],[-90.7,39.4],[-91.5,40.5],[-91.7,40.6],
+      [-95.7,39.9],[-95.7,40.6]
+    ]]
+  },
+  "Iowa": {
+    lLat:42.0, lLon:-93.5,
+    polys:[[
+      [-96.6,43.5],[-91.2,43.5],[-91.0,43.0],[-90.6,42.5],[-90.4,41.5],[-91.5,40.5],
+      [-91.7,40.6],[-95.7,40.6],[-96.6,43.5]
+    ]]
+  },
+  "Louisiana": {
+    lLat:31.2, lLon:-92.5,
+    polys:[[
+      [-94.0,33.0],[-91.2,33.0],[-91.1,33.0],[-89.7,33.0],[-89.7,31.0],
+      [-89.5,30.2],[-89.6,29.8],[-89.3,29.3],[-89.0,29.0],[-89.5,29.2],
+      [-90.0,28.9],[-90.5,29.0],[-91.3,29.0],[-91.9,29.4],[-93.0,29.7],
+      [-93.8,29.7],[-94.0,30.0],[-94.0,33.0]
+    ]]
+  },
+};
+
+// ============================================================
+// ALL ATS CITIES — 262 villes
+// cap = capitale d'état
+// ============================================================
+const cities = [
+  // CALIFORNIA (base) — 25 cities
+  {name:'Bakersfield',    state:'California',   lat:35.37, lon:-119.02, dlc:'base',      cap:false},
+  {name:'Barstow',        state:'California',   lat:34.90, lon:-117.02, dlc:'base',      cap:false},
+  {name:'Bishop',         state:'California',   lat:37.36, lon:-118.39, dlc:'base',      cap:false},
+  {name:'El Centro',      state:'California',   lat:32.79, lon:-115.56, dlc:'base',      cap:false},
+  {name:'Eureka',         state:'California',   lat:40.80, lon:-124.16, dlc:'base',      cap:false},
+  {name:'Fresno',         state:'California',   lat:36.75, lon:-119.77, dlc:'base',      cap:false},
+  {name:'Huron',          state:'California',   lat:36.20, lon:-120.10, dlc:'base',      cap:false},
+  {name:'Los Angeles',    state:'California',   lat:34.05, lon:-118.24, dlc:'base',      cap:false},
+  {name:'Mammoth Lakes',  state:'California',   lat:37.65, lon:-118.97, dlc:'base',      cap:false},
+  {name:'Mojave',         state:'California',   lat:35.05, lon:-118.17, dlc:'base',      cap:false},
+  {name:'Monterey',       state:'California',   lat:36.60, lon:-121.89, dlc:'base',      cap:false},
+  {name:'Oakdale',        state:'California',   lat:37.77, lon:-120.85, dlc:'base',      cap:false},
+  {name:'Oakland',        state:'California',   lat:37.80, lon:-122.27, dlc:'base',      cap:false},
+  {name:'Oxnard',         state:'California',   lat:34.20, lon:-119.18, dlc:'base',      cap:false},
+  {name:'Redding',        state:'California',   lat:40.59, lon:-122.39, dlc:'base',      cap:false},
+  {name:'Sacramento',     state:'California',   lat:38.58, lon:-121.49, dlc:'base',      cap:true},
+  {name:'San Diego',      state:'California',   lat:32.72, lon:-117.16, dlc:'base',      cap:false},
+  {name:'San Francisco',  state:'California',   lat:37.78, lon:-122.41, dlc:'base',      cap:false},
+  {name:'San Jose',       state:'California',   lat:37.34, lon:-121.89, dlc:'base',      cap:false},
+  {name:'San Luis Obispo',state:'California',   lat:35.28, lon:-120.66, dlc:'base',      cap:false},
+  {name:'Santa Cruz',     state:'California',   lat:36.97, lon:-122.03, dlc:'base',      cap:false},
+  {name:'Stockton',       state:'California',   lat:37.96, lon:-121.29, dlc:'base',      cap:false},
+  {name:'Truckee',        state:'California',   lat:39.33, lon:-120.18, dlc:'base',      cap:false},
+  {name:'Ukiah',          state:'California',   lat:39.15, lon:-123.21, dlc:'base',      cap:false},
+  {name:'Vallejo',        state:'California',   lat:38.10, lon:-122.26, dlc:'base',      cap:false},
+  // NEVADA (base) — 10 cities
+  {name:'Carson City',    state:'Nevada',       lat:39.16, lon:-119.77, dlc:'base',      cap:true},
+  {name:'Elko',           state:'Nevada',       lat:40.83, lon:-115.76, dlc:'base',      cap:false},
+  {name:'Ely',            state:'Nevada',       lat:39.25, lon:-114.88, dlc:'base',      cap:false},
+  {name:'Hawthorne',      state:'Nevada',       lat:38.53, lon:-118.62, dlc:'base',      cap:false},
+  {name:'Las Vegas',      state:'Nevada',       lat:36.17, lon:-115.14, dlc:'base',      cap:false},
+  {name:'Laughlin',       state:'Nevada',       lat:35.17, lon:-114.58, dlc:'base',      cap:false},
+  {name:'Reno',           state:'Nevada',       lat:39.53, lon:-119.81, dlc:'base',      cap:false},
+  {name:'Tonopah',        state:'Nevada',       lat:38.07, lon:-117.23, dlc:'base',      cap:false},
+  {name:'Winnemucca',     state:'Nevada',       lat:40.97, lon:-117.74, dlc:'base',      cap:false},
+  {name:'Wells',          state:'Nevada',       lat:41.11, lon:-114.96, dlc:'base',      cap:false},
+  // ARIZONA — 16 cities
+  {name:'Bullhead City',  state:'Arizona',      lat:35.14, lon:-114.53, dlc:'arizona',   cap:false},
+  {name:'Casa Grande',    state:'Arizona',      lat:32.88, lon:-111.76, dlc:'arizona',   cap:false},
+  {name:'Douglas',        state:'Arizona',      lat:31.34, lon:-109.54, dlc:'arizona',   cap:false},
+  {name:'Flagstaff',      state:'Arizona',      lat:35.20, lon:-111.65, dlc:'arizona',   cap:false},
+  {name:'Globe',          state:'Arizona',      lat:33.39, lon:-110.79, dlc:'arizona',   cap:false},
+  {name:'Kingman',        state:'Arizona',      lat:35.19, lon:-114.05, dlc:'arizona',   cap:false},
+  {name:'Lake Havasu City',state:'Arizona',     lat:34.48, lon:-114.32, dlc:'arizona',   cap:false},
+  {name:'Nogales',        state:'Arizona',      lat:31.34, lon:-110.94, dlc:'arizona',   cap:false},
+  {name:'Page',           state:'Arizona',      lat:36.91, lon:-111.45, dlc:'arizona',   cap:false},
+  {name:'Parker',         state:'Arizona',      lat:34.15, lon:-114.29, dlc:'arizona',   cap:false},
+  {name:'Phoenix',        state:'Arizona',      lat:33.45, lon:-112.07, dlc:'arizona',   cap:true},
+  {name:'Prescott',       state:'Arizona',      lat:34.54, lon:-112.47, dlc:'arizona',   cap:false},
+  {name:'Show Low',       state:'Arizona',      lat:34.25, lon:-110.03, dlc:'arizona',   cap:false},
+  {name:'Tucson',         state:'Arizona',      lat:32.22, lon:-110.97, dlc:'arizona',   cap:false},
+  {name:'Winslow',        state:'Arizona',      lat:35.02, lon:-110.70, dlc:'arizona',   cap:false},
+  {name:'Yuma',           state:'Arizona',      lat:32.69, lon:-114.63, dlc:'arizona',   cap:false},
+  // NEW MEXICO — 14 cities
+  {name:'Alamogordo',     state:'New Mexico',   lat:32.90, lon:-105.96, dlc:'newmexico', cap:false},
+  {name:'Albuquerque',    state:'New Mexico',   lat:35.09, lon:-106.65, dlc:'newmexico', cap:false},
+  {name:'Artesia',        state:'New Mexico',   lat:32.85, lon:-104.40, dlc:'newmexico', cap:false},
+  {name:'Carlsbad',       state:'New Mexico',   lat:32.42, lon:-104.23, dlc:'newmexico', cap:false},
+  {name:'Clovis',         state:'New Mexico',   lat:34.40, lon:-103.20, dlc:'newmexico', cap:false},
+  {name:'Farmington',     state:'New Mexico',   lat:36.73, lon:-108.21, dlc:'newmexico', cap:false},
+  {name:'Gallup',         state:'New Mexico',   lat:35.53, lon:-108.74, dlc:'newmexico', cap:false},
+  {name:'Hobbs',          state:'New Mexico',   lat:32.70, lon:-103.14, dlc:'newmexico', cap:false},
+  {name:'Las Cruces',     state:'New Mexico',   lat:32.31, lon:-106.78, dlc:'newmexico', cap:false},
+  {name:'Lordsburg',      state:'New Mexico',   lat:32.35, lon:-108.71, dlc:'newmexico', cap:false},
+  {name:'Raton',          state:'New Mexico',   lat:36.90, lon:-104.44, dlc:'newmexico', cap:false},
+  {name:'Roswell',        state:'New Mexico',   lat:33.39, lon:-104.52, dlc:'newmexico', cap:false},
+  {name:'Santa Fe',       state:'New Mexico',   lat:35.69, lon:-105.94, dlc:'newmexico', cap:true},
+  {name:'Truth or Consequences',state:'New Mexico',lat:33.13,lon:-107.25,dlc:'newmexico',cap:false},
+  // OREGON — 14 cities
+  {name:'Astoria',        state:'Oregon',       lat:46.19, lon:-123.83, dlc:'oregon',    cap:false},
+  {name:'Bend',           state:'Oregon',       lat:44.06, lon:-121.31, dlc:'oregon',    cap:false},
+  {name:'Brookings',      state:'Oregon',       lat:42.05, lon:-124.29, dlc:'oregon',    cap:false},
+  {name:'Burns',          state:'Oregon',       lat:43.59, lon:-119.05, dlc:'oregon',    cap:false},
+  {name:'Coos Bay',       state:'Oregon',       lat:43.37, lon:-124.21, dlc:'oregon',    cap:false},
+  {name:'Eugene',         state:'Oregon',       lat:44.05, lon:-123.09, dlc:'oregon',    cap:false},
+  {name:'Klamath Falls',  state:'Oregon',       lat:42.22, lon:-121.78, dlc:'oregon',    cap:false},
+  {name:'Medford',        state:'Oregon',       lat:42.33, lon:-122.87, dlc:'oregon',    cap:false},
+  {name:'Ontario',        state:'Oregon',       lat:44.03, lon:-116.96, dlc:'oregon',    cap:false},
+  {name:'Pendleton',      state:'Oregon',       lat:45.67, lon:-118.79, dlc:'oregon',    cap:false},
+  {name:'Portland',       state:'Oregon',       lat:45.52, lon:-122.68, dlc:'oregon',    cap:false},
+  {name:'Roseburg',       state:'Oregon',       lat:43.22, lon:-123.35, dlc:'oregon',    cap:false},
+  {name:'Salem',          state:'Oregon',       lat:44.94, lon:-123.03, dlc:'oregon',    cap:true},
+  {name:'The Dalles',     state:'Oregon',       lat:45.60, lon:-121.18, dlc:'oregon',    cap:false},
+  // WASHINGTON — 16 cities
+  {name:'Aberdeen',       state:'Washington',   lat:46.97, lon:-123.82, dlc:'washington',cap:false},
+  {name:'Bellingham',     state:'Washington',   lat:48.75, lon:-122.49, dlc:'washington',cap:false},
+  {name:'Ellensburg',     state:'Washington',   lat:46.99, lon:-120.55, dlc:'washington',cap:false},
+  {name:'Everett',        state:'Washington',   lat:47.98, lon:-122.20, dlc:'washington',cap:false},
+  {name:'Kennewick',      state:'Washington',   lat:46.21, lon:-119.14, dlc:'washington',cap:false},
+  {name:'Longview',       state:'Washington',   lat:46.14, lon:-122.94, dlc:'washington',cap:false},
+  {name:'Moses Lake',     state:'Washington',   lat:47.13, lon:-119.28, dlc:'washington',cap:false},
+  {name:'Olympia',        state:'Washington',   lat:47.04, lon:-122.90, dlc:'washington',cap:true},
+  {name:'Port Angeles',   state:'Washington',   lat:48.12, lon:-123.43, dlc:'washington',cap:false},
+  {name:'Seattle',        state:'Washington',   lat:47.61, lon:-122.33, dlc:'washington',cap:false},
+  {name:'Spokane',        state:'Washington',   lat:47.66, lon:-117.43, dlc:'washington',cap:false},
+  {name:'Tacoma',         state:'Washington',   lat:47.25, lon:-122.44, dlc:'washington',cap:false},
+  {name:'Vancouver',      state:'Washington',   lat:45.64, lon:-122.66, dlc:'washington',cap:false},
+  {name:'Walla Walla',    state:'Washington',   lat:46.07, lon:-118.34, dlc:'washington',cap:false},
+  {name:'Wenatchee',      state:'Washington',   lat:47.42, lon:-120.31, dlc:'washington',cap:false},
+  {name:'Yakima',         state:'Washington',   lat:46.60, lon:-120.51, dlc:'washington',cap:false},
+  // UTAH — 10 cities
+  {name:'Cedar City',     state:'Utah',         lat:37.68, lon:-113.06, dlc:'utah',      cap:false},
+  {name:'Green River',    state:'Utah',         lat:38.99, lon:-110.16, dlc:'utah',      cap:false},
+  {name:'Moab',           state:'Utah',         lat:38.57, lon:-109.55, dlc:'utah',      cap:false},
+  {name:'Ogden',          state:'Utah',         lat:41.22, lon:-111.97, dlc:'utah',      cap:false},
+  {name:'Price',          state:'Utah',         lat:39.60, lon:-110.81, dlc:'utah',      cap:false},
+  {name:'Provo',          state:'Utah',         lat:40.23, lon:-111.66, dlc:'utah',      cap:false},
+  {name:'Salt Lake City', state:'Utah',         lat:40.76, lon:-111.89, dlc:'utah',      cap:true},
+  {name:'St. George',     state:'Utah',         lat:37.10, lon:-113.58, dlc:'utah',      cap:false},
+  {name:'Vernal',         state:'Utah',         lat:40.45, lon:-109.53, dlc:'utah',      cap:false},
+  {name:'Wendover',       state:'Utah',         lat:40.74, lon:-114.03, dlc:'utah',      cap:false},
+  // IDAHO — 11 cities
+  {name:'Boise',          state:'Idaho',        lat:43.62, lon:-116.20, dlc:'idaho',     cap:true},
+  {name:'Burley',         state:'Idaho',        lat:42.54, lon:-113.79, dlc:'idaho',     cap:false},
+  {name:'Caldwell',       state:'Idaho',        lat:43.66, lon:-116.69, dlc:'idaho',     cap:false},
+  {name:'Coeur d\'Alene', state:'Idaho',        lat:47.68, lon:-116.78, dlc:'idaho',     cap:false},
+  {name:'Idaho Falls',    state:'Idaho',        lat:43.49, lon:-112.04, dlc:'idaho',     cap:false},
+  {name:'Lewiston',       state:'Idaho',        lat:46.42, lon:-117.02, dlc:'idaho',     cap:false},
+  {name:'Moscow',         state:'Idaho',        lat:46.73, lon:-117.00, dlc:'idaho',     cap:false},
+  {name:'Pocatello',      state:'Idaho',        lat:42.87, lon:-112.45, dlc:'idaho',     cap:false},
+  {name:'Sandpoint',      state:'Idaho',        lat:48.28, lon:-116.55, dlc:'idaho',     cap:false},
+  {name:'Sun Valley',     state:'Idaho',        lat:43.70, lon:-114.35, dlc:'idaho',     cap:false},
+  {name:'Twin Falls',     state:'Idaho',        lat:42.56, lon:-114.46, dlc:'idaho',     cap:false},
+  // COLORADO — 13 cities
+  {name:'Alamosa',        state:'Colorado',     lat:37.47, lon:-105.87, dlc:'colorado',  cap:false},
+  {name:'Aspen',          state:'Colorado',     lat:39.19, lon:-106.82, dlc:'colorado',  cap:false},
+  {name:'Colorado Springs',state:'Colorado',    lat:38.83, lon:-104.82, dlc:'colorado',  cap:false},
+  {name:'Craig',          state:'Colorado',     lat:40.52, lon:-107.55, dlc:'colorado',  cap:false},
+  {name:'Denver',         state:'Colorado',     lat:39.74, lon:-104.98, dlc:'colorado',  cap:true},
+  {name:'Durango',        state:'Colorado',     lat:37.28, lon:-107.88, dlc:'colorado',  cap:false},
+  {name:'Fort Collins',   state:'Colorado',     lat:40.59, lon:-105.08, dlc:'colorado',  cap:false},
+  {name:'Grand Junction', state:'Colorado',     lat:39.06, lon:-108.55, dlc:'colorado',  cap:false},
+  {name:'Glenwood Springs',state:'Colorado',    lat:39.55, lon:-107.32, dlc:'colorado',  cap:false},
+  {name:'Montrose',       state:'Colorado',     lat:38.48, lon:-107.88, dlc:'colorado',  cap:false},
+  {name:'Pueblo',         state:'Colorado',     lat:38.26, lon:-104.61, dlc:'colorado',  cap:false},
+  {name:'Steamboat Springs',state:'Colorado',   lat:40.48, lon:-106.83, dlc:'colorado',  cap:false},
+  {name:'Trinidad',       state:'Colorado',     lat:37.17, lon:-104.50, dlc:'colorado',  cap:false},
+  // WYOMING — 11 cities
+  {name:'Casper',         state:'Wyoming',      lat:42.87, lon:-106.31, dlc:'wyoming',   cap:false},
+  {name:'Cheyenne',       state:'Wyoming',      lat:41.14, lon:-104.82, dlc:'wyoming',   cap:true},
+  {name:'Cody',           state:'Wyoming',      lat:44.53, lon:-109.06, dlc:'wyoming',   cap:false},
+  {name:'Evanston',       state:'Wyoming',      lat:41.27, lon:-110.96, dlc:'wyoming',   cap:false},
+  {name:'Gillette',       state:'Wyoming',      lat:44.29, lon:-105.50, dlc:'wyoming',   cap:false},
+  {name:'Green River',    state:'Wyoming',      lat:41.53, lon:-109.47, dlc:'wyoming',   cap:false},
+  {name:'Jackson',        state:'Wyoming',      lat:43.48, lon:-110.76, dlc:'wyoming',   cap:false},
+  {name:'Laramie',        state:'Wyoming',      lat:41.31, lon:-105.59, dlc:'wyoming',   cap:false},
+  {name:'Rawlins',        state:'Wyoming',      lat:41.79, lon:-107.24, dlc:'wyoming',   cap:false},
+  {name:'Rock Springs',   state:'Wyoming',      lat:41.59, lon:-109.20, dlc:'wyoming',   cap:false},
+  {name:'Sheridan',       state:'Wyoming',      lat:44.80, lon:-106.96, dlc:'wyoming',   cap:false},
+  // MONTANA — 15 cities
+  {name:'Billings',       state:'Montana',      lat:45.78, lon:-108.50, dlc:'montana',   cap:false},
+  {name:'Bozeman',        state:'Montana',      lat:45.68, lon:-111.04, dlc:'montana',   cap:false},
+  {name:'Butte',          state:'Montana',      lat:46.00, lon:-112.54, dlc:'montana',   cap:false},
+  {name:'Cut Bank',       state:'Montana',      lat:48.63, lon:-112.33, dlc:'montana',   cap:false},
+  {name:'Glasgow',        state:'Montana',      lat:48.20, lon:-106.64, dlc:'montana',   cap:false},
+  {name:'Glendive',       state:'Montana',      lat:47.11, lon:-104.71, dlc:'montana',   cap:false},
+  {name:'Great Falls',    state:'Montana',      lat:47.50, lon:-111.30, dlc:'montana',   cap:false},
+  {name:'Hamilton',       state:'Montana',      lat:46.25, lon:-114.16, dlc:'montana',   cap:false},
+  {name:'Havre',          state:'Montana',      lat:48.55, lon:-109.68, dlc:'montana',   cap:false},
+  {name:'Helena',         state:'Montana',      lat:46.60, lon:-112.02, dlc:'montana',   cap:true},
+  {name:'Kalispell',      state:'Montana',      lat:48.20, lon:-114.31, dlc:'montana',   cap:false},
+  {name:'Lewistown',      state:'Montana',      lat:47.06, lon:-109.43, dlc:'montana',   cap:false},
+  {name:'Miles City',     state:'Montana',      lat:46.41, lon:-105.84, dlc:'montana',   cap:false},
+  {name:'Missoula',       state:'Montana',      lat:46.87, lon:-113.99, dlc:'montana',   cap:false},
+  {name:'Wolf Point',     state:'Montana',      lat:48.09, lon:-105.64, dlc:'montana',   cap:false},
+  // TEXAS — 30 cities
+  {name:'Abilene',        state:'Texas',        lat:32.45, lon:-99.73,  dlc:'texas',     cap:false},
+  {name:'Amarillo',       state:'Texas',        lat:35.22, lon:-101.83, dlc:'texas',     cap:false},
+  {name:'Austin',         state:'Texas',        lat:30.27, lon:-97.74,  dlc:'texas',     cap:true},
+  {name:'Beaumont',       state:'Texas',        lat:30.09, lon:-94.10,  dlc:'texas',     cap:false},
+  {name:'Big Spring',     state:'Texas',        lat:32.25, lon:-101.48, dlc:'texas',     cap:false},
+  {name:'Brownsville',    state:'Texas',        lat:25.90, lon:-97.50,  dlc:'texas',     cap:false},
+  {name:'Childress',      state:'Texas',        lat:34.43, lon:-100.20, dlc:'texas',     cap:false},
+  {name:'Corpus Christi', state:'Texas',        lat:27.80, lon:-97.40,  dlc:'texas',     cap:false},
+  {name:'Dallas',         state:'Texas',        lat:32.78, lon:-96.80,  dlc:'texas',     cap:false},
+  {name:'Del Rio',        state:'Texas',        lat:29.36, lon:-100.90, dlc:'texas',     cap:false},
+  {name:'El Paso',        state:'Texas',        lat:31.76, lon:-106.49, dlc:'texas',     cap:false},
+  {name:'Fort Stockton',  state:'Texas',        lat:30.89, lon:-102.88, dlc:'texas',     cap:false},
+  {name:'Fort Worth',     state:'Texas',        lat:32.75, lon:-97.33,  dlc:'texas',     cap:false},
+  {name:'Fredericksburg', state:'Texas',        lat:30.27, lon:-98.87,  dlc:'texas',     cap:false},
+  {name:'Galveston',      state:'Texas',        lat:29.30, lon:-94.80,  dlc:'texas',     cap:false},
+  {name:'Houston',        state:'Texas',        lat:29.76, lon:-95.37,  dlc:'texas',     cap:false},
+  {name:'Laredo',         state:'Texas',        lat:27.51, lon:-99.51,  dlc:'texas',     cap:false},
+  {name:'Longview',       state:'Texas',        lat:32.50, lon:-94.74,  dlc:'texas',     cap:false},
+  {name:'Lubbock',        state:'Texas',        lat:33.58, lon:-101.85, dlc:'texas',     cap:false},
+  {name:'Lufkin',         state:'Texas',        lat:31.34, lon:-94.73,  dlc:'texas',     cap:false},
+  {name:'McAllen',        state:'Texas',        lat:26.20, lon:-98.23,  dlc:'texas',     cap:false},
+  {name:'Midland',        state:'Texas',        lat:31.99, lon:-102.08, dlc:'texas',     cap:false},
+  {name:'Odessa',         state:'Texas',        lat:31.85, lon:-102.37, dlc:'texas',     cap:false},
+  {name:'San Angelo',     state:'Texas',        lat:31.46, lon:-100.44, dlc:'texas',     cap:false},
+  {name:'San Antonio',    state:'Texas',        lat:29.42, lon:-98.49,  dlc:'texas',     cap:false},
+  {name:'Texarkana',      state:'Texas',        lat:33.43, lon:-94.05,  dlc:'texas',     cap:false},
+  {name:'Tyler',          state:'Texas',        lat:32.35, lon:-95.30,  dlc:'texas',     cap:false},
+  {name:'Victoria',       state:'Texas',        lat:28.80, lon:-97.00,  dlc:'texas',     cap:false},
+  {name:'Waco',           state:'Texas',        lat:31.55, lon:-97.14,  dlc:'texas',     cap:false},
+  {name:'Wichita Falls',  state:'Texas',        lat:33.91, lon:-98.49,  dlc:'texas',     cap:false},
+  // OKLAHOMA — 10 cities
+  {name:'Ardmore',        state:'Oklahoma',     lat:34.17, lon:-97.14,  dlc:'oklahoma',  cap:false},
+  {name:'Elk City',       state:'Oklahoma',     lat:35.41, lon:-99.40,  dlc:'oklahoma',  cap:false},
+  {name:'Enid',           state:'Oklahoma',     lat:36.40, lon:-97.88,  dlc:'oklahoma',  cap:false},
+  {name:'Lawton',         state:'Oklahoma',     lat:34.61, lon:-98.39,  dlc:'oklahoma',  cap:false},
+  {name:'McAlester',      state:'Oklahoma',     lat:34.93, lon:-95.77,  dlc:'oklahoma',  cap:false},
+  {name:'Miami',          state:'Oklahoma',     lat:36.87, lon:-94.88,  dlc:'oklahoma',  cap:false},
+  {name:'Oklahoma City',  state:'Oklahoma',     lat:35.47, lon:-97.52,  dlc:'oklahoma',  cap:true},
+  {name:'Ponca City',     state:'Oklahoma',     lat:36.71, lon:-97.08,  dlc:'oklahoma',  cap:false},
+  {name:'Tulsa',          state:'Oklahoma',     lat:36.15, lon:-95.99,  dlc:'oklahoma',  cap:false},
+  {name:'Woodward',       state:'Oklahoma',     lat:36.43, lon:-99.39,  dlc:'oklahoma',  cap:false},
+  // KANSAS — 14 cities
+  {name:'Colby',          state:'Kansas',       lat:39.40, lon:-101.05, dlc:'kansas',    cap:false},
+  {name:'Dodge City',     state:'Kansas',       lat:37.75, lon:-100.02, dlc:'kansas',    cap:false},
+  {name:'Emporia',        state:'Kansas',       lat:38.40, lon:-96.18,  dlc:'kansas',    cap:false},
+  {name:'Garden City',    state:'Kansas',       lat:37.97, lon:-100.87, dlc:'kansas',    cap:false},
+  {name:'Hays',           state:'Kansas',       lat:38.88, lon:-99.33,  dlc:'kansas',    cap:false},
+  {name:'Hutchinson',     state:'Kansas',       lat:38.06, lon:-97.93,  dlc:'kansas',    cap:false},
+  {name:'Liberal',        state:'Kansas',       lat:37.04, lon:-100.92, dlc:'kansas',    cap:false},
+  {name:'Manhattan',      state:'Kansas',       lat:39.18, lon:-96.57,  dlc:'kansas',    cap:false},
+  {name:'Salina',         state:'Kansas',       lat:38.84, lon:-97.61,  dlc:'kansas',    cap:false},
+  {name:'Topeka',         state:'Kansas',       lat:39.05, lon:-95.68,  dlc:'kansas',    cap:true},
+  {name:'Wichita',        state:'Kansas',       lat:37.69, lon:-97.34,  dlc:'kansas',    cap:false},
+  {name:'Parsons',        state:'Kansas',       lat:37.34, lon:-95.27,  dlc:'kansas',    cap:false},
+  {name:'Pittsburg',      state:'Kansas',       lat:37.41, lon:-94.70,  dlc:'kansas',    cap:false},
+  {name:'Great Bend',     state:'Kansas',       lat:38.36, lon:-98.76,  dlc:'kansas',    cap:false},
+  // NEBRASKA — 12 cities
+  {name:'Alliance',       state:'Nebraska',     lat:42.10, lon:-102.87, dlc:'nebraska',  cap:false},
+  {name:'Columbus',       state:'Nebraska',     lat:41.43, lon:-97.37,  dlc:'nebraska',  cap:false},
+  {name:'Grand Island',   state:'Nebraska',     lat:40.93, lon:-98.34,  dlc:'nebraska',  cap:false},
+  {name:'Hastings',       state:'Nebraska',     lat:40.59, lon:-98.39,  dlc:'nebraska',  cap:false},
+  {name:'Kearney',        state:'Nebraska',     lat:40.70, lon:-99.08,  dlc:'nebraska',  cap:false},
+  {name:'Lincoln',        state:'Nebraska',     lat:40.81, lon:-96.68,  dlc:'nebraska',  cap:true},
+  {name:'McCook',         state:'Nebraska',     lat:40.20, lon:-100.63, dlc:'nebraska',  cap:false},
+  {name:'Norfolk',        state:'Nebraska',     lat:42.03, lon:-97.42,  dlc:'nebraska',  cap:false},
+  {name:'North Platte',   state:'Nebraska',     lat:41.12, lon:-100.77, dlc:'nebraska',  cap:false},
+  {name:'Ogallala',       state:'Nebraska',     lat:41.13, lon:-101.72, dlc:'nebraska',  cap:false},
+  {name:'Omaha',          state:'Nebraska',     lat:41.26, lon:-95.94,  dlc:'nebraska',  cap:false},
+  {name:'Scottsbluff',    state:'Nebraska',     lat:41.87, lon:-103.66, dlc:'nebraska',  cap:false},
+  // ARKANSAS — 10 cities
+  {name:'Conway',         state:'Arkansas',     lat:35.09, lon:-92.44,  dlc:'arkansas',  cap:false},
+  {name:'El Dorado',      state:'Arkansas',     lat:33.21, lon:-92.67,  dlc:'arkansas',  cap:false},
+  {name:'Fayetteville',   state:'Arkansas',     lat:36.06, lon:-94.16,  dlc:'arkansas',  cap:false},
+  {name:'Fort Smith',     state:'Arkansas',     lat:35.39, lon:-94.40,  dlc:'arkansas',  cap:false},
+  {name:'Hot Springs',    state:'Arkansas',     lat:34.50, lon:-93.05,  dlc:'arkansas',  cap:false},
+  {name:'Jonesboro',      state:'Arkansas',     lat:35.84, lon:-90.70,  dlc:'arkansas',  cap:false},
+  {name:'Little Rock',    state:'Arkansas',     lat:34.75, lon:-92.29,  dlc:'arkansas',  cap:true},
+  {name:'Pine Bluff',     state:'Arkansas',     lat:34.22, lon:-92.00,  dlc:'arkansas',  cap:false},
+  {name:'West Memphis',   state:'Arkansas',     lat:35.15, lon:-90.18,  dlc:'arkansas',  cap:false},
+  // MISSOURI — 12 cities
+  {name:'Cape Girardeau', state:'Missouri',     lat:37.31, lon:-89.52,  dlc:'missouri',  cap:false},
+  {name:'Columbia',       state:'Missouri',     lat:38.95, lon:-92.33,  dlc:'missouri',  cap:false},
+  {name:'Jefferson City', state:'Missouri',     lat:38.58, lon:-92.17,  dlc:'missouri',  cap:true},
+  {name:'Joplin',         state:'Missouri',     lat:37.08, lon:-94.51,  dlc:'missouri',  cap:false},
+  {name:'Kansas City',    state:'Missouri',     lat:39.10, lon:-94.58,  dlc:'missouri',  cap:false},
+  {name:'Kirksville',     state:'Missouri',     lat:40.19, lon:-92.58,  dlc:'missouri',  cap:false},
+  {name:'Poplar Bluff',   state:'Missouri',     lat:36.76, lon:-90.39,  dlc:'missouri',  cap:false},
+  {name:'Rolla',          state:'Missouri',     lat:37.95, lon:-91.77,  dlc:'missouri',  cap:false},
+  {name:'Sikeston',       state:'Missouri',     lat:36.88, lon:-89.59,  dlc:'missouri',  cap:false},
+  {name:'Springfield',    state:'Missouri',     lat:37.21, lon:-93.29,  dlc:'missouri',  cap:false},
+  {name:'St. Joseph',     state:'Missouri',     lat:39.77, lon:-94.85,  dlc:'missouri',  cap:false},
+  {name:'St. Louis',      state:'Missouri',     lat:38.63, lon:-90.20,  dlc:'missouri',  cap:false},
+  // IOWA — 12 cities
+  {name:'Burlington',     state:'Iowa',         lat:40.81, lon:-91.11,  dlc:'iowa',      cap:false},
+  {name:'Cedar Rapids',   state:'Iowa',         lat:41.98, lon:-91.67,  dlc:'iowa',      cap:false},
+  {name:'Council Bluffs', state:'Iowa',         lat:41.26, lon:-95.86,  dlc:'iowa',      cap:false},
+  {name:'Davenport',      state:'Iowa',         lat:41.52, lon:-90.58,  dlc:'iowa',      cap:false},
+  {name:'Des Moines',     state:'Iowa',         lat:41.59, lon:-93.62,  dlc:'iowa',      cap:true},
+  {name:'Dubuque',        state:'Iowa',         lat:42.50, lon:-90.66,  dlc:'iowa',      cap:false},
+  {name:'Iowa City',      state:'Iowa',         lat:41.66, lon:-91.53,  dlc:'iowa',      cap:false},
+  {name:'Mason City',     state:'Iowa',         lat:43.15, lon:-93.20,  dlc:'iowa',      cap:false},
+  {name:'Ottumwa',        state:'Iowa',         lat:41.02, lon:-92.41,  dlc:'iowa',      cap:false},
+  {name:'Sioux City',     state:'Iowa',         lat:42.50, lon:-96.40,  dlc:'iowa',      cap:false},
+  {name:'Waterloo',       state:'Iowa',         lat:42.49, lon:-92.34,  dlc:'iowa',      cap:false},
+  {name:'Webster City',   state:'Iowa',         lat:42.46, lon:-93.82,  dlc:'iowa',      cap:false},
+  // LOUISIANA — 11 cities
+  {name:'Alexandria',     state:'Louisiana',    lat:31.31, lon:-92.45,  dlc:'louisiana', cap:false},
+  {name:'Baton Rouge',    state:'Louisiana',    lat:30.45, lon:-91.15,  dlc:'louisiana', cap:true},
+  {name:'DeRidder',       state:'Louisiana',    lat:30.84, lon:-93.29,  dlc:'louisiana', cap:false},
+  {name:'Houma',          state:'Louisiana',    lat:29.60, lon:-90.72,  dlc:'louisiana', cap:false},
+  {name:'Lafayette',      state:'Louisiana',    lat:30.22, lon:-92.02,  dlc:'louisiana', cap:false},
+  {name:'Lake Charles',   state:'Louisiana',    lat:30.23, lon:-93.21,  dlc:'louisiana', cap:false},
+  {name:'Monroe',         state:'Louisiana',    lat:32.51, lon:-92.11,  dlc:'louisiana', cap:false},
+  {name:'Morgan City',    state:'Louisiana',    lat:29.70, lon:-91.20,  dlc:'louisiana', cap:false},
+  {name:'New Orleans',    state:'Louisiana',    lat:29.95, lon:-90.07,  dlc:'louisiana', cap:false},
+  {name:'Shreveport',     state:'Louisiana',    lat:32.52, lon:-93.75,  dlc:'louisiana', cap:false},
+  {name:'Thibodaux',      state:'Louisiana',    lat:29.80, lon:-90.82,  dlc:'louisiana', cap:false},
+];
+
+// ============================================================
+// PROJECTION — simple equirectangular for USA
+// ============================================================
+const SVG_W=1600, SVG_H=900;
+const LON_MIN=-128, LON_MAX=-88, LAT_MIN=24, LAT_MAX=50;
+
+function proj(lat,lon){
+  return {
+    x:(lon-LON_MIN)/(LON_MAX-LON_MIN)*SVG_W,
+    y:(1-(lat-LAT_MIN)/(LAT_MAX-LAT_MIN))*SVG_H
+  };
+}
+function polyPath(poly){
+  return poly.map((p,i)=>{
+    const {x,y}=proj(p[1],p[0]);
+    return (i===0?'M':'L')+x.toFixed(1)+' '+y.toFixed(1);
+  }).join(' ')+'Z';
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let scale=1,tx=0,ty=0,isDrag=false,sx,sy,stx,sty;
+const dlcVisible={};Object.keys(DLC).forEach(k=>dlcVisible[k]=true);
+let showBorders=true,showNames=true;
+const mapArea=document.getElementById('mapArea');
+const svgEl=document.getElementById('map');
+const ttEl=document.getElementById('tooltip');
+let gStates,gLabels,gCities;
+
+// ============================================================
+// BUILD SVG
+// ============================================================
+function buildSVG(){
+  svgEl.innerHTML='';
+  svgEl.setAttribute('viewBox',`0 0 ${SVG_W} ${SVG_H}`);
+  svgEl.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svgEl.appendChild(mk('rect',{width:SVG_W,height:SVG_H,fill:'#080c10'}));
+
+  // Grid
+  const grid=mk('g',{});
+  for(let lon=-125;lon<=-88;lon+=5){
+    const a=proj(LAT_MIN,lon),b=proj(LAT_MAX,lon);
+    grid.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'#0d1a26','stroke-width':0.6}));
+  }
+  for(let lat=25;lat<=50;lat+=5){
+    const a=proj(lat,LON_MIN),b=proj(lat,LON_MAX);
+    grid.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'#0d1a26','stroke-width':0.6}));
+  }
+  svgEl.appendChild(grid);
+
+  // States
+  gStates=mk('g',{id:'gStates'});
+  svgEl.appendChild(gStates);
+
+  // State labels
+  gLabels=mk('g',{id:'gLabels'});
+  svgEl.appendChild(gLabels);
+
+  Object.entries(STATES).forEach(([name,sdata])=>{
+    sdata.polys.forEach(poly=>{
+      const path=mk('path',{
+        d:polyPath(poly),
+        fill:'rgba(255,255,255,0.04)',
+        stroke:'rgba(255,255,255,0.40)',
+        'stroke-width':0.9,
+        'stroke-linejoin':'round',
+        class:'state-shape'
+      });
+      gStates.appendChild(path);
+    });
+    const lp=proj(sdata.lLat,sdata.lLon);
+    const lbl=mk('text',{
+      x:lp.x,y:lp.y,'font-size':13,
+      class:'state-label',
+      stroke:'rgba(0,0,0,0.8)','stroke-width':3.5,
+      'stroke-linejoin':'round','paint-order':'stroke fill'
+    });
+    lbl.textContent=name;
+    gLabels.appendChild(lbl);
+  });
+
+  // Cities
+  gCities=mk('g',{id:'gCities'});
+  svgEl.appendChild(gCities);
+
+  cities.forEach((city,i)=>{
+    const p=proj(city.lat,city.lon);
+    const col=DLC[city.dlc].color;
+    const r=city.cap?5:3;
+    const g=mk('g',{class:'city-g','data-idx':i});
+    g.style.display=dlcVisible[city.dlc]?'':'none';
+
+    g.appendChild(mk('circle',{cx:p.x,cy:p.y,r,fill:col,class:'cdot',
+      stroke:city.cap?'#fff':col,'stroke-width':city.cap?1.5:0,opacity:0.9}));
+
+    const fs=city.cap?11:9;
+    const txt=mk('text',{x:p.x+r+2,y:p.y+4,'font-size':fs,fill:col,
+      stroke:'#080c10','stroke-width':2.5,'stroke-linejoin':'round',
+      class:'clabel','data-dlc':city.dlc,'paint-order':'stroke fill',
+      'font-weight':city.cap?'700':'600'});
+    txt.textContent=city.name;
+    g.appendChild(txt);
+
+    g.addEventListener('mouseenter',e=>showTT(e,city,col));
+    g.addEventListener('mouseleave',hideTT);
+    g.addEventListener('click',e=>{e.stopPropagation();showTT(e,city,col);});
+    gCities.appendChild(g);
+  });
+
+  applyTransform();
+}
+
+function mk(tag,attrs){
+  const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const[k,v]of Object.entries(attrs))el.setAttribute(k,v);
+  return el;
+}
+
+// ============================================================
+// TRANSFORM
+// ============================================================
+function applyTransform(){
+  const t=`translate(${tx},${ty}) scale(${scale})`;
+  gStates.setAttribute('transform',t);
+  gLabels.setAttribute('transform',t);
+  gCities.setAttribute('transform',t);
+  document.getElementById('zlevel').textContent=`Zoom: ${scale.toFixed(1)}×`;
+  adaptScale();
+}
+function adaptScale(){
+  svgEl.querySelectorAll('.cdot').forEach(c=>{
+    const base=c.getAttribute('stroke')==='#fff'?5:3;
+    c.setAttribute('r',base/Math.max(scale,0.5));
+  });
+  svgEl.querySelectorAll('.clabel').forEach(t=>{
+    const base=t.closest('.city-g').querySelector('.cdot').getAttribute('stroke')==='#fff'?11:9;
+    t.setAttribute('font-size',Math.max(5,base/Math.max(scale,0.5)));
+    t.setAttribute('stroke-width',2.5/Math.max(scale,0.5));
+    const r=parseFloat(t.closest('.city-g').querySelector('.cdot').getAttribute('r'));
+    t.setAttribute('x',parseFloat(t.closest('.city-g').querySelector('.cdot').getAttribute('cx'))+r+2);
+  });
+  svgEl.querySelectorAll('.state-shape').forEach(p=>{
+    p.setAttribute('stroke-width',0.9/Math.max(scale,0.5));
+  });
+  svgEl.querySelectorAll('.state-label').forEach(t=>{
+    t.setAttribute('font-size',Math.max(7,13/Math.max(scale,0.5)));
+    t.setAttribute('stroke-width',3.5/Math.max(scale,0.5));
+  });
+}
+
+// ============================================================
+// PAN / ZOOM
+// ============================================================
+mapArea.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=mapArea.getBoundingClientRect();
+  const scX=SVG_W/rect.width,scY=SVG_H/rect.height;
+  const mx=(e.clientX-rect.left)*scX,my=(e.clientY-rect.top)*scY;
+  const d=e.deltaY<0?1.15:0.87;
+  const ns=Math.min(14,Math.max(0.4,scale*d));
+  tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;
+  applyTransform();
+},{passive:false});
+mapArea.addEventListener('mousedown',e=>{
+  isDrag=true;sx=e.clientX;sy=e.clientY;stx=tx;sty=ty;
+  mapArea.classList.add('drag');
+});
+document.addEventListener('mousemove',e=>{
+  if(!isDrag)return;
+  const rect=mapArea.getBoundingClientRect();
+  tx=stx+(e.clientX-sx)*(SVG_W/rect.width);
+  ty=sty+(e.clientY-sy)*(SVG_H/rect.height);
+  applyTransform();
+});
+document.addEventListener('mouseup',()=>{isDrag=false;mapArea.classList.remove('drag');});
+document.getElementById('zIn').onclick=()=>{scale=Math.min(14,scale*1.3);applyTransform();};
+document.getElementById('zOut').onclick=()=>{scale=Math.max(0.4,scale/1.3);applyTransform();};
+document.getElementById('zReset').onclick=()=>{scale=1;tx=0;ty=0;applyTransform();};
+
+// ============================================================
+// TOGGLES
+// ============================================================
+document.getElementById('btnBorders').addEventListener('click',function(){
+  showBorders=!showBorders;this.classList.toggle('active',showBorders);
+  gStates.style.display=showBorders?'':'none';
+});
+document.getElementById('btnStateNames').addEventListener('click',function(){
+  showNames=!showNames;this.classList.toggle('active',showNames);
+  gLabels.style.display=showNames?'':'none';
+});
+
+// ============================================================
+// TOOLTIP
+// ============================================================
+function showTT(e,city,col){
+  ttEl.innerHTML=`
+    <div class="tt-name" style="color:${col}">${city.name}</div>
+    <div class="tt-state">📍 ${city.state}</div>
+    <div class="tt-dlc" style="color:${col}">${DLC[city.dlc].label}</div>
+    ${city.cap?'<div style="color:#ffcc44;font-size:.7rem">★ Capitale d\'État</div>':''}
+  `;
+  ttEl.style.display='block';moveTT(e);
+}
+function hideTT(){ttEl.style.display='none';}
+function moveTT(e){
+  let x=e.clientX+14,y=e.clientY-36;
+  if(x+240>window.innerWidth)x=e.clientX-255;
+  if(y<0)y=e.clientY+10;
+  ttEl.style.left=x+'px';ttEl.style.top=y+'px';
+}
+mapArea.addEventListener('mousemove',e=>{if(ttEl.style.display==='block')moveTT(e);});
+
+// ============================================================
+// LEGEND
+// ============================================================
+const legendWrap=document.getElementById('legend');
+Object.entries(DLC).forEach(([key,dlc])=>{
+  const el=document.createElement('div');el.className='leg';el.dataset.key=key;
+  el.innerHTML=`<div class="leg-dot" style="background:${dlc.color}"></div><span>${dlc.label}</span>`;
+  el.addEventListener('click',()=>{
+    dlcVisible[key]=!dlcVisible[key];
+    el.classList.toggle('off',!dlcVisible[key]);
+    svgEl.querySelectorAll('.city-g').forEach(g=>{
+      if(cities[+g.dataset.idx].dlc===key)g.style.display=dlcVisible[key]?'':'none';
+    });
+  });
+  legendWrap.appendChild(el);
+});
+
+// ============================================================
+// SEARCH
+// ============================================================
+const searchBox=document.getElementById('searchBox');
+const searchRes=document.getElementById('searchResults');
+function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+searchBox.addEventListener('input',()=>{
+  const q=norm(searchBox.value.trim());
+  if(!q){searchRes.style.display='none';return;}
+  const matches=cities.filter(c=>norm(c.name).includes(q)||norm(c.state).includes(q)).slice(0,25);
+  if(!matches.length){searchRes.style.display='none';return;}
+  searchRes.innerHTML='';
+  matches.forEach(c=>{
+    const d=document.createElement('div');d.className='sr-item';
+    const col=DLC[c.dlc].color;
+    d.innerHTML=`<div class="sr-dot" style="background:${col}"></div>
+      <div class="sr-main">
+        <span class="sr-name">${c.name}${c.cap?' ★':''}</span>
+        <span class="sr-meta">${c.state} · ${DLC[c.dlc].label}</span>
+      </div>`;
+    d.addEventListener('click',()=>{flyTo(c);searchRes.style.display='none';searchBox.value='';});
+    searchRes.appendChild(d);
+  });
+  searchRes.style.display='block';
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))searchRes.style.display='none';});
+
+function flyTo(city){
+  const p=proj(city.lat,city.lon);
+  const rect=mapArea.getBoundingClientRect();
+  scale=5;
+  tx=(rect.width/2)*(SVG_W/rect.width)-p.x*scale;
+  ty=(rect.height/2)*(SVG_H/rect.height)-p.y*scale;
+  applyTransform();
+}
+
+document.getElementById('counter').textContent=`${cities.length} villes`;
+buildSVG();
+</script>
+</body>
+</html>

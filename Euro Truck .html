@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETS2 — Carte Europe (FR)</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg:#080d12; --panel:#0f1720; --border:#1a2840; --text:#c5d8e8; --dim:#4a6070; --accent:#e8a020; }
+body { background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+header { background:var(--panel); border-bottom:2px solid #1a3050; padding:7px 13px; display:flex; gap:9px; align-items:center; flex-wrap:wrap; flex-shrink:0; z-index:20; }
+.logo { font-size:1.3rem; font-weight:700; letter-spacing:3px; color:var(--accent); text-shadow:0 0 15px rgba(232,160,32,.4); white-space:nowrap; }
+.logo span { color:var(--text); }
+.search-wrap { position:relative; }
+#searchBox { background:var(--bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; font-family:'Share Tech Mono',monospace; font-size:.8rem; outline:none; width:210px; }
+#searchBox:focus { border-color:var(--accent); }
+#searchResults { position:absolute; top:30px; left:0; background:var(--panel); border:1px solid var(--accent); max-height:280px; overflow-y:auto; z-index:200; display:none; font-family:'Share Tech Mono',monospace; font-size:.78rem; min-width:280px; }
+.sr-item { padding:5px 10px; cursor:pointer; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:flex-start; }
+.sr-item:hover { background:#1a2840; }
+.sr-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.sr-main { display:flex; flex-direction:column; }
+.sr-name { color:var(--text); font-size:.85rem; font-family:'Rajdhani',sans-serif; font-weight:600; }
+.sr-alt { color:var(--dim); font-size:.68rem; }
+.sr-meta { color:var(--dim); font-size:.68rem; }
+.legend-wrap { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; font-family:'Share Tech Mono',monospace; font-size:.68rem; }
+.leg { display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 4px; border:1px solid transparent; user-select:none; transition:border-color .2s; }
+.leg:hover { border-color:var(--border); }
+.leg.off { opacity:.3; }
+.leg-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.options { display:flex; gap:6px; align-items:center; margin-left:2px; }
+.opt-btn { background:var(--panel); border:1px solid var(--border); color:var(--text); padding:3px 8px; font-family:'Share Tech Mono',monospace; font-size:.68rem; cursor:pointer; transition:border-color .2s,color .2s; white-space:nowrap; }
+.opt-btn:hover,.opt-btn.active { border-color:var(--accent); color:var(--accent); }
+.zoom-wrap { display:flex; gap:3px; margin-left:auto; }
+.zb { background:var(--panel); border:1px solid var(--border); color:var(--text); width:26px; height:26px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; transition:border-color .2s,color .2s; }
+.zb:hover { border-color:var(--accent); color:var(--accent); }
+.zb.wide { width:42px; font-size:.62rem; font-family:'Share Tech Mono',monospace; }
+#counter { font-family:'Share Tech Mono',monospace; font-size:.7rem; color:var(--dim); white-space:nowrap; }
+.map-area { flex:1; overflow:hidden; cursor:grab; position:relative; }
+.map-area.drag { cursor:grabbing; }
+svg#map { width:100%; height:100%; display:block; }
+.country-shape { transition:fill .3s; }
+.country-shape:hover { fill-opacity:.25 !important; }
+.city-g { cursor:pointer; }
+.city-g:hover .cdot { filter:brightness(1.8); }
+.cdot { transition:r .1s; }
+.clabel { font-family:'Rajdhani',sans-serif; font-weight:600; pointer-events:none; paint-order:stroke fill; }
+.country-label { pointer-events:none; font-family:'Rajdhani',sans-serif; font-weight:700; fill:rgba(255,255,255,0.55); paint-order:stroke fill; text-anchor:middle; dominant-baseline:middle; }
+.tooltip { position:absolute; background:var(--panel); border:1px solid var(--accent); padding:7px 12px; font-family:'Share Tech Mono',monospace; font-size:.76rem; pointer-events:none; display:none; z-index:100; max-width:240px; box-shadow:0 0 20px rgba(232,160,32,.15); line-height:1.7; }
+.tt-name { font-family:'Rajdhani',sans-serif; font-size:1.1rem; font-weight:700; }
+.tt-alt { font-size:.68rem; opacity:.6; }
+.tt-dlc { font-size:.68rem; }
+.infobar { padding:4px 13px; background:var(--panel); border-top:1px solid var(--border); font-family:'Share Tech Mono',monospace; font-size:.66rem; color:var(--dim); display:flex; gap:14px; flex-shrink:0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ETS<span>2</span> MAP <span style="font-size:.75rem;color:#5a8090">FR</span></div>
+  <div class="search-wrap">
+    <input id="searchBox" type="text" placeholder="🔍 Ville FR ou EN..." autocomplete="off"/>
+    <div id="searchResults"></div>
+  </div>
+  <div class="legend-wrap" id="legend"></div>
+  <div class="options">
+    <button class="opt-btn active" id="btnBorders">🗺 Frontières</button>
+    <button class="opt-btn active" id="btnCountryNames">🏳 Pays</button>
+  </div>
+  <div class="zoom-wrap">
+    <button class="zb" id="zIn">+</button>
+    <button class="zb" id="zOut">−</button>
+    <button class="zb wide" id="zReset">Reset</button>
+  </div>
+  <div id="counter"></div>
+</header>
+<div class="map-area" id="mapArea"><svg id="map"></svg></div>
+<div class="tooltip" id="tooltip"></div>
+<div class="infobar">
+  <span>🖱 Scroll=zoom · Drag=déplacer · Recherche: nom FR ou EN/local</span>
+  <span id="zlevel">Zoom: 1.0×</span>
+  <span>ETS2 v1.57 · 372 villes · Tous DLC inclus</span>
+</div>
+<script>
+// ============================================================
+// DLC COLORS
+// ============================================================
+const DLC = {
+  base:    {label:'Jeu de base',    color:'#e8a020'},
+  goeast:  {label:'Going East!',    color:'#48c8f0'},
+  scandi:  {label:'Scandinavia',    color:'#70d090'},
+  france:  {label:'Vive la France', color:'#e06060'},
+  italia:  {label:'Italia',         color:'#d0a860'},
+  baltic:  {label:'Baltic Sea',     color:'#60b8d8'},
+  black:   {label:'Black Sea',      color:'#b060c8'},
+  iberia:  {label:'Iberia',         color:'#f0c030'},
+  balkans: {label:'West Balkans',   color:'#e07840'},
+  greece:  {label:'Greece',         color:'#40c8a8'},
+  nordic:  {label:'Nordic Horizons',color:'#a0d8f8'},
+};
+
+// ============================================================
+// COUNTRY BORDERS (simplified polygons)
+// Each polygon: array of [lon, lat] pairs
+// ============================================================
+const COUNTRIES = {
+  "Royaume-Uni":{"fr":"Royaume-Uni","lLat":54.5,"lLon":-2.5,"polys":[[[-5.7,50.0],[-4.5,49.9],[-2.5,50.5],[-0.5,50.7],[1.5,51.5],[1.8,51.3],[0.5,51.5],[0.3,52.5],[1.7,52.9],[0.5,53.5],[0.2,54.0],[-0.5,54.5],[-1.5,55.0],[-2.0,55.5],[-3.5,55.9],[-4.5,56.5],[-5.0,57.0],[-4.0,58.5],[-3.0,58.7],[-2.0,58.5],[-1.5,57.5],[-1.8,56.5],[-3.0,55.8],[-4.0,55.0],[-3.5,54.5],[-4.5,53.5],[-5.5,51.5],[-5.7,50.0]]]},
+  "France":{"fr":"France","lLat":46.5,"lLon":2.5,"polys":[[[-4.8,47.9],[-4.0,48.5],[-2.0,48.7],[0.0,49.4],[1.6,50.9],[2.5,51.0],[3.1,50.8],[4.0,50.0],[5.0,49.5],[6.4,49.2],[7.5,48.3],[7.6,47.6],[7.1,46.2],[6.0,45.1],[7.0,43.9],[7.5,43.7],[6.2,43.2],[3.0,43.3],[1.8,43.4],[0.7,42.8],[-0.3,43.0],[-1.8,43.4],[-2.0,44.0],[-1.3,46.0],[-2.2,47.0],[-4.8,47.9]],[[8.5,41.3],[9.6,41.4],[9.6,43.0],[8.5,43.0],[8.0,42.2],[8.5,41.3]]]},
+  "Espagne":{"fr":"Espagne","lLat":40.0,"lLon":-3.5,"polys":[[[-9.3,43.8],[-8.0,43.8],[-6.0,43.6],[-4.0,43.7],[-2.0,43.4],[0.0,42.8],[1.8,42.8],[3.2,42.5],[3.3,41.4],[2.5,40.5],[0.2,39.0],[-0.5,37.6],[-1.0,37.0],[-1.5,36.7],[-2.0,36.5],[-5.2,36.0],[-5.5,36.1],[-6.0,36.5],[-7.0,37.0],[-7.5,38.0],[-7.0,39.5],[-7.0,40.0],[-6.5,40.5],[-7.0,41.0],[-8.0,41.8],[-8.7,42.0],[-9.0,43.0],[-9.3,43.8]],[[ 2.3,39.6],[3.5,39.7],[4.3,39.9],[3.5,40.1],[2.3,39.6]]]},
+  "Portugal":{"fr":"Portugal","lLat":39.5,"lLon":-8.0,"polys":[[[-9.3,41.8],[-8.7,42.0],[-8.0,41.8],[-7.0,41.0],[-6.5,40.5],[-7.0,40.0],[-7.0,39.5],[-7.5,38.0],[-7.0,37.0],[-7.4,37.0],[-8.0,36.9],[-9.0,37.0],[-9.5,38.5],[-9.5,39.5],[-9.3,41.8]]]},
+  "Allemagne":{"fr":"Allemagne","lLat":51.2,"lLon":10.5,"polys":[[[6.0,51.9],[5.9,52.6],[6.7,53.3],[8.0,54.9],[9.5,55.0],[10.0,55.0],[12.5,54.5],[14.0,54.1],[14.3,53.5],[14.5,51.0],[12.5,50.3],[13.0,50.0],[12.1,48.0],[12.5,47.5],[13.0,47.7],[13.5,47.5],[10.5,47.4],[8.5,47.5],[7.6,47.6],[7.5,48.3],[6.4,49.2],[5.0,49.5],[5.0,50.0],[6.0,51.0],[6.0,51.9]]]},
+  "Pays-Bas":{"fr":"Pays-Bas","lLat":52.5,"lLon":5.2,"polys":[[[4.2,51.4],[3.4,51.4],[3.4,52.0],[4.0,53.0],[4.8,53.3],[5.5,53.5],[7.0,53.2],[7.0,52.5],[6.7,52.5],[6.0,51.9],[5.0,51.7],[4.2,51.4]]]},
+  "Belgique":{"fr":"Belgique","lLat":50.5,"lLon":4.5,"polys":[[[2.5,51.1],[3.4,51.4],[4.2,51.4],[5.0,51.7],[6.0,51.0],[5.0,49.5],[4.9,49.5],[4.0,49.9],[3.1,50.8],[2.5,51.0],[2.5,51.1]]]},
+  "Luxembourg":{"fr":"Lux.","lLat":49.7,"lLon":6.1,"polys":[[[5.7,49.5],[6.5,49.5],[6.5,50.2],[5.7,50.2],[5.7,49.5]]]},
+  "Suisse":{"fr":"Suisse","lLat":46.8,"lLon":8.2,"polys":[[[5.9,47.8],[7.0,47.6],[8.5,47.8],[9.5,47.5],[10.5,47.4],[10.0,46.5],[8.5,46.0],[7.0,45.9],[5.9,46.1],[5.9,47.8]]]},
+  "Autriche":{"fr":"Autriche","lLat":47.5,"lLon":14.0,"polys":[[[9.5,47.5],[10.5,47.4],[13.0,47.7],[13.5,47.5],[16.9,48.6],[17.2,48.0],[17.0,47.0],[16.1,46.8],[15.0,46.6],[13.5,46.5],[12.5,47.0],[10.5,46.9],[9.5,47.5]]]},
+  "Italie":{"fr":"Italie","lLat":42.5,"lLon":12.5,"polys":[[[7.0,43.9],[7.6,44.2],[8.5,46.0],[10.5,47.4],[12.5,47.0],[13.5,46.5],[15.0,46.6],[13.8,45.6],[13.5,45.8],[14.0,45.0],[16.0,41.5],[16.9,40.5],[17.5,40.0],[18.5,40.5],[16.5,38.0],[15.6,38.0],[15.2,37.7],[15.7,37.9],[16.0,38.5],[16.5,39.0],[15.7,39.5],[15.2,40.0],[14.0,40.0],[12.0,37.5],[11.0,38.0],[10.5,38.5],[8.5,39.0],[8.0,40.5],[9.5,41.0],[11.5,42.0],[12.0,43.5],[12.5,44.0],[12.0,44.5],[10.0,44.0],[8.0,44.5],[7.5,44.0],[7.0,43.9]],[[12.4,37.8],[13.0,37.5],[14.5,37.0],[15.5,37.8],[14.5,38.2],[12.4,37.8]],[[8.2,39.0],[9.5,41.0],[9.0,41.5],[8.2,40.0],[8.2,39.0]]]},
+  "Danemark":{"fr":"Danemark","lLat":56.0,"lLon":10.0,"polys":[[[8.0,54.9],[9.5,55.0],[10.5,55.7],[10.5,57.7],[10.0,57.7],[9.5,57.0],[9.0,56.5],[8.5,56.5],[8.0,56.0],[8.0,55.5],[8.0,54.9]],[[9.5,55.5],[10.5,55.5],[10.5,56.5],[9.5,56.5],[9.5,55.5]]]},
+  "Suède":{"fr":"Suède","lLat":62.0,"lLon":16.0,"polys":[[[12.5,55.4],[13.0,56.0],[12.5,57.0],[11.5,57.5],[11.0,59.0],[11.5,59.5],[11.5,60.5],[12.5,61.0],[12.0,63.0],[13.5,64.5],[16.0,67.5],[18.5,69.0],[20.0,69.5],[22.0,68.5],[24.0,67.5],[22.5,66.0],[21.5,65.0],[20.0,63.5],[19.5,62.0],[18.5,60.0],[18.0,59.5],[18.5,59.0],[18.0,57.5],[16.5,56.5],[14.0,55.4],[12.5,55.4]]]},
+  "Norvège":{"fr":"Norvège","lLat":65.0,"lLon":14.0,"polys":[[[5.0,57.9],[5.0,58.5],[4.5,59.5],[5.0,60.5],[5.0,61.5],[6.0,62.0],[7.0,63.0],[8.0,63.5],[9.0,63.5],[10.0,64.0],[11.0,64.5],[12.0,65.5],[14.0,66.5],[16.0,67.5],[18.0,68.5],[18.5,69.0],[20.0,70.0],[24.0,70.5],[28.0,71.0],[28.0,70.0],[24.0,68.5],[22.0,68.5],[20.0,69.5],[18.5,69.0],[16.0,67.5],[13.5,64.5],[12.0,63.0],[12.5,61.0],[11.5,60.5],[11.5,59.5],[11.0,59.0],[11.5,57.5],[12.5,57.0],[12.5,56.5],[11.0,56.0],[8.0,57.0],[5.0,57.9]]]},
+  "Finlande":{"fr":"Finlande","lLat":64.5,"lLon":26.0,"polys":[[[22.0,60.0],[24.0,60.0],[26.0,60.5],[28.0,60.5],[30.0,61.0],[29.0,62.5],[30.0,64.5],[28.5,65.5],[27.0,67.0],[26.0,68.0],[24.5,68.5],[22.0,68.5],[20.0,69.5],[22.0,68.5],[24.0,67.5],[22.5,66.0],[21.5,65.0],[21.0,64.0],[21.5,63.0],[21.0,62.0],[19.5,62.0],[20.0,61.0],[21.5,60.5],[22.0,60.0]]]},
+  "Estonie":{"fr":"Estonie","lLat":58.8,"lLon":25.5,"polys":[[[21.0,57.5],[23.0,57.5],[24.0,57.5],[27.5,57.5],[28.0,57.8],[28.2,59.5],[27.0,59.8],[24.5,59.8],[22.0,59.5],[21.0,59.0],[21.0,57.5]]]},
+  "Lettonie":{"fr":"Lettonie","lLat":56.9,"lLon":25.0,"polys":[[[21.0,57.5],[21.0,57.0],[23.0,56.5],[25.0,56.0],[27.0,55.8],[28.2,56.0],[28.2,57.5],[27.0,57.5],[24.0,57.5],[23.0,57.5],[21.0,57.5]]]},
+  "Lituanie":{"fr":"Lituanie","lLat":55.5,"lLon":23.5,"polys":[[[20.9,55.3],[21.5,57.0],[22.5,57.0],[24.5,57.0],[25.0,56.0],[24.0,55.0],[22.5,54.2],[21.0,54.5],[20.9,55.3]]]},
+  "Pologne":{"fr":"Pologne","lLat":52.0,"lLon":19.5,"polys":[[[14.5,51.0],[14.3,53.5],[14.5,54.1],[16.5,54.5],[18.5,54.5],[20.0,54.5],[22.0,54.5],[23.5,54.0],[24.0,53.5],[24.0,52.0],[23.5,51.5],[24.0,51.0],[22.0,49.5],[18.5,49.0],[17.0,50.0],[15.0,50.8],[14.5,51.0]]]},
+  "Rép. Tchèque":{"fr":"Rép. Tchèque","lLat":49.8,"lLon":15.5,"polys":[[[12.5,50.3],[14.5,51.0],[15.0,50.8],[17.0,50.0],[18.5,49.0],[18.0,48.5],[16.0,48.5],[15.0,48.5],[13.0,48.5],[12.1,48.0],[12.5,50.3]]]},
+  "Slovaquie":{"fr":"Slovaquie","lLat":48.7,"lLon":19.5,"polys":[[[16.9,48.6],[17.0,48.0],[18.0,48.5],[18.5,49.0],[20.0,49.0],[22.5,49.0],[22.5,48.5],[21.0,48.0],[20.5,47.8],[18.5,47.8],[17.2,48.0],[16.9,48.6]]]},
+  "Hongrie":{"fr":"Hongrie","lLat":47.2,"lLon":19.5,"polys":[[[16.1,46.8],[17.0,47.0],[17.2,48.0],[18.5,47.8],[20.5,47.8],[21.0,48.0],[22.5,48.5],[22.5,47.8],[22.0,47.5],[22.0,46.0],[20.5,45.5],[18.5,46.0],[16.5,46.5],[16.1,46.8]]]},
+  "Roumanie":{"fr":"Roumanie","lLat":45.8,"lLon":24.5,"polys":[[[22.0,47.5],[22.5,47.8],[24.0,48.0],[26.5,48.5],[28.0,48.0],[30.0,45.5],[29.5,45.0],[29.0,45.5],[28.5,45.2],[28.0,44.0],[27.0,43.8],[26.0,44.0],[25.0,43.7],[23.0,43.8],[22.5,44.0],[21.5,44.5],[20.5,45.5],[22.0,46.0],[22.0,47.5]]]},
+  "Bulgarie":{"fr":"Bulgarie","lLat":42.8,"lLon":25.5,"polys":[[[22.5,44.0],[23.0,43.8],[25.0,43.7],[26.0,44.0],[27.0,43.8],[28.5,43.7],[30.0,43.5],[28.0,42.0],[27.5,42.0],[26.0,41.5],[23.5,41.5],[22.5,41.5],[22.0,42.0],[22.5,43.0],[22.5,44.0]]]},
+  "Grèce":{"fr":"Grèce","lLat":39.5,"lLon":22.0,"polys":[[[20.0,42.0],[21.0,41.0],[22.5,41.5],[23.5,41.5],[26.0,41.5],[27.5,41.0],[26.0,40.0],[24.5,40.8],[23.0,40.5],[22.0,40.5],[21.0,39.5],[20.5,39.0],[22.0,38.0],[23.0,37.0],[22.5,37.0],[21.5,37.5],[21.0,36.8],[20.5,37.0],[19.5,38.0],[20.0,39.0],[20.0,40.0],[19.5,40.5],[20.0,41.5],[20.0,42.0]],[[24.0,35.5],[25.8,35.1],[26.5,35.4],[24.5,35.8],[24.0,35.5]]]},
+  "Turquie":{"fr":"Turquie","lLat":41.3,"lLon":28.5,"polys":[[[26.0,41.5],[26.5,42.0],[28.5,41.5],[30.0,41.0],[30.0,40.0],[28.0,40.0],[27.5,41.0],[26.0,41.5]]]},
+  "Serbie":{"fr":"Serbie","lLat":44.0,"lLon":20.5,"polys":[[[18.5,46.0],[20.5,45.5],[22.0,46.0],[22.0,44.0],[22.5,43.0],[22.5,42.5],[22.0,42.0],[20.5,42.0],[20.0,42.0],[19.5,43.0],[18.5,43.5],[18.5,44.0],[19.5,44.5],[19.0,45.5],[18.5,46.0]]]},
+  "Croatie":{"fr":"Croatie","lLat":45.2,"lLon":16.5,"polys":[[[13.5,45.5],[14.5,45.3],[15.0,46.0],[16.5,46.5],[17.0,46.5],[18.5,46.0],[19.0,45.5],[17.5,45.0],[16.5,45.0],[15.5,44.0],[16.0,43.5],[17.5,43.0],[17.0,42.5],[16.0,43.0],[14.5,44.0],[13.5,44.5],[13.5,45.5]]]},
+  "Bosnie-Herzégovine":{"fr":"Bosnie-H.","lLat":43.9,"lLon":17.5,"polys":[[[15.5,44.0],[16.5,45.0],[17.5,45.0],[18.5,45.2],[19.0,44.0],[18.5,43.5],[17.5,43.0],[16.5,43.0],[16.0,43.5],[15.5,44.0]]]},
+  "Slovénie":{"fr":"Slovénie","lLat":46.1,"lLon":14.9,"polys":[[[13.5,45.5],[13.5,46.5],[15.0,46.8],[16.5,46.5],[15.0,46.0],[14.5,45.3],[13.5,45.5]]]},
+  "Albanie":{"fr":"Albanie","lLat":41.2,"lLon":20.0,"polys":[[[19.5,42.5],[20.0,42.0],[20.5,42.0],[20.5,41.0],[20.0,40.0],[19.5,40.0],[19.5,39.5],[20.0,39.0],[19.5,39.5],[19.0,40.0],[19.5,41.5],[19.5,42.5]]]},
+  "Monténégro":{"fr":"Monténégro","lLat":42.8,"lLon":19.3,"polys":[[[18.5,43.5],[19.5,43.0],[20.0,42.0],[19.5,42.5],[19.5,41.5],[19.0,42.5],[18.5,43.0],[18.5,43.5]]]},
+  "Kosovo":{"fr":"Kosovo","lLat":42.6,"lLon":21.0,"polys":[[[20.0,42.0],[20.5,42.0],[21.5,42.5],[22.0,42.0],[21.0,41.5],[20.5,41.0],[20.0,41.5],[20.0,42.0]]]},
+  "Macédoine du N.":{"fr":"Mac. du Nord","lLat":41.6,"lLon":21.7,"polys":[[[20.5,42.0],[21.0,41.0],[22.5,41.5],[23.5,41.5],[22.0,41.0],[22.5,40.5],[22.0,40.5],[21.0,40.5],[20.5,41.0],[20.5,42.0]]]}
+};
+
+
+// ============================================================
+// CITIES
+// ============================================================
+const cities = [
+  // BASE — UK
+  {name:'Aberdeen',nameAlt:'Aberdeen',country:'Royaume-Uni',lat:57.15,lon:-2.11,dlc:'base',cap:false},
+  {name:'Birmingham',nameAlt:'Birmingham',country:'Royaume-Uni',lat:52.48,lon:-1.90,dlc:'base',cap:false},
+  {name:'Cambridge',nameAlt:'Cambridge',country:'Royaume-Uni',lat:52.20,lon:0.12,dlc:'base',cap:false},
+  {name:'Cardiff',nameAlt:'Cardiff',country:'Royaume-Uni',lat:51.48,lon:-3.18,dlc:'base',cap:true},
+  {name:'Douvres',nameAlt:'Dover',country:'Royaume-Uni',lat:51.13,lon:1.31,dlc:'base',cap:false},
+  {name:'Édimbourg',nameAlt:'Edinburgh',country:'Royaume-Uni',lat:55.95,lon:-3.19,dlc:'base',cap:true},
+  {name:'Felixstowe',nameAlt:'Felixstowe',country:'Royaume-Uni',lat:51.96,lon:1.35,dlc:'base',cap:false},
+  {name:'Glasgow',nameAlt:'Glasgow',country:'Royaume-Uni',lat:55.86,lon:-4.25,dlc:'base',cap:false},
+  {name:'Grimsby',nameAlt:'Grimsby',country:'Royaume-Uni',lat:53.57,lon:-0.08,dlc:'base',cap:false},
+  {name:'Harwich',nameAlt:'Harwich',country:'Royaume-Uni',lat:51.94,lon:1.28,dlc:'base',cap:false},
+  {name:'Hull',nameAlt:'Hull',country:'Royaume-Uni',lat:53.74,lon:-0.33,dlc:'base',cap:false},
+  {name:'Leeds',nameAlt:'Leeds',country:'Royaume-Uni',lat:53.80,lon:-1.55,dlc:'base',cap:false},
+  {name:'Lincoln',nameAlt:'Lincoln',country:'Royaume-Uni',lat:53.23,lon:-0.54,dlc:'base',cap:false},
+  {name:'Liverpool',nameAlt:'Liverpool',country:'Royaume-Uni',lat:53.41,lon:-2.98,dlc:'base',cap:false},
+  {name:'Londres',nameAlt:'London',country:'Royaume-Uni',lat:51.50,lon:-0.12,dlc:'base',cap:true},
+  {name:'Manchester',nameAlt:'Manchester',country:'Royaume-Uni',lat:53.48,lon:-2.24,dlc:'base',cap:false},
+  {name:'Middlesbrough',nameAlt:'Middlesbrough',country:'Royaume-Uni',lat:54.58,lon:-1.23,dlc:'base',cap:false},
+  {name:'Newcastle',nameAlt:'Newcastle',country:'Royaume-Uni',lat:54.97,lon:-1.62,dlc:'base',cap:false},
+  {name:'Nottingham',nameAlt:'Nottingham',country:'Royaume-Uni',lat:52.95,lon:-1.15,dlc:'base',cap:false},
+  {name:'Plymouth',nameAlt:'Plymouth',country:'Royaume-Uni',lat:50.38,lon:-4.14,dlc:'base',cap:false},
+  {name:'Portsmouth',nameAlt:'Portsmouth',country:'Royaume-Uni',lat:50.80,lon:-1.09,dlc:'base',cap:false},
+  {name:'Sheffield',nameAlt:'Sheffield',country:'Royaume-Uni',lat:53.38,lon:-1.47,dlc:'base',cap:false},
+  {name:'Southampton',nameAlt:'Southampton',country:'Royaume-Uni',lat:50.90,lon:-1.40,dlc:'base',cap:false},
+  {name:'Swansea',nameAlt:'Swansea',country:'Royaume-Uni',lat:51.62,lon:-3.94,dlc:'base',cap:false},
+  {name:'Truro',nameAlt:'Truro',country:'Royaume-Uni',lat:50.26,lon:-5.05,dlc:'base',cap:false},
+  // BASE — FRANCE
+  {name:'Calais',nameAlt:'Calais',country:'France',lat:50.95,lon:1.85,dlc:'base',cap:false},
+  {name:'Dijon',nameAlt:'Dijon',country:'France',lat:47.32,lon:5.04,dlc:'base',cap:false},
+  {name:'Lyon',nameAlt:'Lyon',country:'France',lat:45.75,lon:4.85,dlc:'base',cap:false},
+  {name:'Metz',nameAlt:'Metz',country:'France',lat:49.12,lon:6.18,dlc:'base',cap:false},
+  {name:'Nancy',nameAlt:'Nancy',country:'France',lat:48.69,lon:6.18,dlc:'base',cap:false},
+  {name:'Paris',nameAlt:'Paris',country:'France',lat:48.85,lon:2.35,dlc:'base',cap:true},
+  {name:'Reims',nameAlt:'Reims',country:'France',lat:49.26,lon:4.03,dlc:'base',cap:false},
+  {name:'Strasbourg',nameAlt:'Strasbourg',country:'France',lat:48.58,lon:7.75,dlc:'base',cap:false},
+  // BASE — ALLEMAGNE
+  {name:'Augsbourg',nameAlt:'Augsburg',country:'Allemagne',lat:48.37,lon:10.89,dlc:'base',cap:false},
+  {name:'Berlin',nameAlt:'Berlin',country:'Allemagne',lat:52.52,lon:13.40,dlc:'base',cap:true},
+  {name:'Brême',nameAlt:'Bremen',country:'Allemagne',lat:53.08,lon:8.81,dlc:'base',cap:false},
+  {name:'Cologne',nameAlt:'Köln',country:'Allemagne',lat:50.94,lon:6.96,dlc:'base',cap:false},
+  {name:'Dortmund',nameAlt:'Dortmund',country:'Allemagne',lat:51.51,lon:7.47,dlc:'base',cap:false},
+  {name:'Dresde',nameAlt:'Dresden',country:'Allemagne',lat:51.05,lon:13.74,dlc:'base',cap:false},
+  {name:'Duisbourg',nameAlt:'Duisburg',country:'Allemagne',lat:51.43,lon:6.76,dlc:'base',cap:false},
+  {name:'Düsseldorf',nameAlt:'Düsseldorf',country:'Allemagne',lat:51.22,lon:6.77,dlc:'base',cap:false},
+  {name:'Erfurt',nameAlt:'Erfurt',country:'Allemagne',lat:50.98,lon:11.03,dlc:'base',cap:false},
+  {name:'Francfort',nameAlt:'Frankfurt',country:'Allemagne',lat:50.11,lon:8.68,dlc:'base',cap:false},
+  {name:'Hambourg',nameAlt:'Hamburg',country:'Allemagne',lat:53.55,lon:10.00,dlc:'base',cap:false},
+  {name:'Hanovre',nameAlt:'Hannover',country:'Allemagne',lat:52.37,lon:9.73,dlc:'base',cap:false},
+  {name:'Kassel',nameAlt:'Kassel',country:'Allemagne',lat:51.32,lon:9.50,dlc:'base',cap:false},
+  {name:'Kiel',nameAlt:'Kiel',country:'Allemagne',lat:54.32,lon:10.14,dlc:'base',cap:false},
+  {name:'Leipzig',nameAlt:'Leipzig',country:'Allemagne',lat:51.34,lon:12.38,dlc:'base',cap:false},
+  {name:'Lübeck',nameAlt:'Lübeck',country:'Allemagne',lat:53.87,lon:10.69,dlc:'base',cap:false},
+  {name:'Magdebourg',nameAlt:'Magdeburg',country:'Allemagne',lat:52.13,lon:11.63,dlc:'base',cap:false},
+  {name:'Mannheim',nameAlt:'Mannheim',country:'Allemagne',lat:49.49,lon:8.47,dlc:'base',cap:false},
+  {name:'Munich',nameAlt:'München',country:'Allemagne',lat:48.14,lon:11.58,dlc:'base',cap:false},
+  {name:'Nuremberg',nameAlt:'Nürnberg',country:'Allemagne',lat:49.45,lon:11.08,dlc:'base',cap:false},
+  {name:'Osnabrück',nameAlt:'Osnabrück',country:'Allemagne',lat:52.28,lon:8.05,dlc:'base',cap:false},
+  {name:'Rostock',nameAlt:'Rostock',country:'Allemagne',lat:54.09,lon:12.14,dlc:'base',cap:false},
+  {name:'Sarrebruck',nameAlt:'Saarbrücken',country:'Allemagne',lat:49.23,lon:7.00,dlc:'base',cap:false},
+  {name:'Stuttgart',nameAlt:'Stuttgart',country:'Allemagne',lat:48.78,lon:9.18,dlc:'base',cap:false},
+  {name:'Flensbourg',nameAlt:'Flensburg',country:'Allemagne',lat:54.79,lon:9.44,dlc:'base',cap:false},
+  // BASE — PAYS-BAS
+  {name:'Amsterdam',nameAlt:'Amsterdam',country:'Pays-Bas',lat:52.37,lon:4.90,dlc:'base',cap:true},
+  {name:'Arnhem',nameAlt:'Arnhem',country:'Pays-Bas',lat:51.98,lon:5.91,dlc:'base',cap:false},
+  {name:'Eindhoven',nameAlt:'Eindhoven',country:'Pays-Bas',lat:51.44,lon:5.48,dlc:'base',cap:false},
+  {name:'Groningue',nameAlt:'Groningen',country:'Pays-Bas',lat:53.22,lon:6.57,dlc:'base',cap:false},
+  {name:'Rotterdam',nameAlt:'Rotterdam',country:'Pays-Bas',lat:51.92,lon:4.48,dlc:'base',cap:false},
+  {name:'Utrecht',nameAlt:'Utrecht',country:'Pays-Bas',lat:52.09,lon:5.12,dlc:'base',cap:false},
+  {name:'Zwolle',nameAlt:'Zwolle',country:'Pays-Bas',lat:52.52,lon:6.09,dlc:'base',cap:false},
+  // BASE — BELGIQUE
+  {name:'Anvers',nameAlt:'Antwerp / Antwerpen',country:'Belgique',lat:51.22,lon:4.40,dlc:'base',cap:false},
+  {name:'Bruges',nameAlt:'Brugge',country:'Belgique',lat:51.21,lon:3.22,dlc:'base',cap:false},
+  {name:'Bruxelles',nameAlt:'Brussels / Brussel',country:'Belgique',lat:50.85,lon:4.35,dlc:'base',cap:true},
+  {name:'Gand',nameAlt:'Ghent / Gent',country:'Belgique',lat:51.05,lon:3.72,dlc:'base',cap:false},
+  {name:'Liège',nameAlt:'Liège',country:'Belgique',lat:50.63,lon:5.57,dlc:'base',cap:false},
+  // BASE — LUX/SUISSE/AUTRICHE
+  {name:'Luxembourg',nameAlt:'Luxembourg',country:'Luxembourg',lat:49.61,lon:6.13,dlc:'base',cap:true},
+  {name:'Bâle',nameAlt:'Basel',country:'Suisse',lat:47.56,lon:7.59,dlc:'base',cap:false},
+  {name:'Berne',nameAlt:'Bern',country:'Suisse',lat:46.95,lon:7.44,dlc:'base',cap:true},
+  {name:'Genève',nameAlt:'Geneva / Genf',country:'Suisse',lat:46.20,lon:6.15,dlc:'base',cap:false},
+  {name:'Zurich',nameAlt:'Zürich',country:'Suisse',lat:47.38,lon:8.54,dlc:'base',cap:false},
+  {name:'Graz',nameAlt:'Graz',country:'Autriche',lat:47.07,lon:15.44,dlc:'base',cap:false},
+  {name:'Innsbruck',nameAlt:'Innsbruck',country:'Autriche',lat:47.27,lon:11.40,dlc:'base',cap:false},
+  {name:'Klagenfurt',nameAlt:'Klagenfurt',country:'Autriche',lat:46.63,lon:14.31,dlc:'base',cap:false},
+  {name:'Linz',nameAlt:'Linz',country:'Autriche',lat:48.31,lon:14.29,dlc:'base',cap:false},
+  {name:'Salzbourg',nameAlt:'Salzburg',country:'Autriche',lat:47.80,lon:13.05,dlc:'base',cap:false},
+  {name:'Vienne',nameAlt:'Vienna / Wien',country:'Autriche',lat:48.21,lon:16.37,dlc:'base',cap:true},
+  // BASE — ITALIE
+  {name:'Gênes',nameAlt:'Genova',country:'Italie',lat:44.41,lon:8.93,dlc:'base',cap:false},
+  {name:'Milan',nameAlt:'Milano',country:'Italie',lat:45.46,lon:9.19,dlc:'base',cap:false},
+  {name:'Turin',nameAlt:'Torino',country:'Italie',lat:45.07,lon:7.69,dlc:'base',cap:false},
+  {name:'Venise',nameAlt:'Venice / Venezia',country:'Italie',lat:45.44,lon:12.33,dlc:'base',cap:false},
+  {name:'Trente',nameAlt:'Trento',country:'Italie',lat:46.07,lon:11.12,dlc:'base',cap:false},
+  {name:'Trieste',nameAlt:'Trieste',country:'Italie',lat:45.65,lon:13.78,dlc:'base',cap:false},
+  {name:'Vérone',nameAlt:'Verona',country:'Italie',lat:45.44,lon:10.99,dlc:'base',cap:false},
+  // GOING EAST
+  {name:'Banská Bystrica',nameAlt:'Banská Bystrica',country:'Slovaquie',lat:48.74,lon:19.15,dlc:'goeast',cap:false},
+  {name:'Białystok',nameAlt:'Bialystok',country:'Pologne',lat:53.13,lon:23.16,dlc:'goeast',cap:false},
+  {name:'Bratislava',nameAlt:'Bratislava',country:'Slovaquie',lat:48.15,lon:17.11,dlc:'goeast',cap:true},
+  {name:'Budapest',nameAlt:'Budapest',country:'Hongrie',lat:47.49,lon:19.04,dlc:'goeast',cap:true},
+  {name:'Debrecen',nameAlt:'Debrecen',country:'Hongrie',lat:47.53,lon:21.63,dlc:'goeast',cap:false},
+  {name:'Gdańsk',nameAlt:'Gdansk / Danzig',country:'Pologne',lat:54.35,lon:18.65,dlc:'goeast',cap:false},
+  {name:'Katowice',nameAlt:'Katowice',country:'Pologne',lat:50.26,lon:19.02,dlc:'goeast',cap:false},
+  {name:'Košice',nameAlt:'Kosice',country:'Slovaquie',lat:48.72,lon:21.26,dlc:'goeast',cap:false},
+  {name:'Cracovie',nameAlt:'Kraków / Krakow',country:'Pologne',lat:50.06,lon:19.94,dlc:'goeast',cap:false},
+  {name:'Łódź',nameAlt:'Lodz',country:'Pologne',lat:51.77,lon:19.46,dlc:'goeast',cap:false},
+  {name:'Lublin',nameAlt:'Lublin',country:'Pologne',lat:51.25,lon:22.57,dlc:'goeast',cap:false},
+  {name:'Olsztyn',nameAlt:'Olsztyn',country:'Pologne',lat:53.77,lon:20.48,dlc:'goeast',cap:false},
+  {name:'Ostrava',nameAlt:'Ostrava',country:'Rép. Tchèque',lat:49.83,lon:18.29,dlc:'goeast',cap:false},
+  {name:'Varsovie',nameAlt:'Warsaw / Warszawa',country:'Pologne',lat:52.23,lon:21.01,dlc:'goeast',cap:true},
+  // SCANDINAVIA
+  {name:'Aalborg',nameAlt:'Aalborg',country:'Danemark',lat:57.05,lon:9.92,dlc:'scandi',cap:false},
+  {name:'Aarhus',nameAlt:'Aarhus / Århus',country:'Danemark',lat:56.16,lon:10.21,dlc:'scandi',cap:false},
+  {name:'Bergen',nameAlt:'Bergen',country:'Norvège',lat:60.39,lon:5.33,dlc:'scandi',cap:false},
+  {name:'Copenhague',nameAlt:'Copenhagen / København',country:'Danemark',lat:55.68,lon:12.57,dlc:'scandi',cap:true},
+  {name:'Esbjerg',nameAlt:'Esbjerg',country:'Danemark',lat:55.47,lon:8.45,dlc:'scandi',cap:false},
+  {name:'Fredericia',nameAlt:'Fredericia',country:'Danemark',lat:55.57,lon:9.76,dlc:'scandi',cap:false},
+  {name:'Frederikshavn',nameAlt:'Frederikshavn',country:'Danemark',lat:57.44,lon:10.55,dlc:'scandi',cap:false},
+  {name:'Gedser',nameAlt:'Gedser',country:'Danemark',lat:54.57,lon:11.93,dlc:'scandi',cap:false},
+  {name:'Göteborg',nameAlt:'Gothenburg / Göteborg',country:'Suède',lat:57.71,lon:11.97,dlc:'scandi',cap:false},
+  {name:'Helsingborg',nameAlt:'Helsingborg',country:'Suède',lat:56.05,lon:12.70,dlc:'scandi',cap:false},
+  {name:'Hirtshals',nameAlt:'Hirtshals',country:'Danemark',lat:57.59,lon:9.96,dlc:'scandi',cap:false},
+  {name:'Jönköping',nameAlt:'Jonkoping',country:'Suède',lat:57.78,lon:14.16,dlc:'scandi',cap:false},
+  {name:'Kalmar',nameAlt:'Kalmar',country:'Suède',lat:56.66,lon:16.36,dlc:'scandi',cap:false},
+  {name:'Karlskrona',nameAlt:'Karlskrona',country:'Suède',lat:56.16,lon:15.59,dlc:'scandi',cap:false},
+  {name:'Kristiansand',nameAlt:'Kristiansand',country:'Norvège',lat:58.15,lon:8.00,dlc:'scandi',cap:false},
+  {name:'Linköping',nameAlt:'Linkoping',country:'Suède',lat:58.41,lon:15.62,dlc:'scandi',cap:false},
+  {name:'Malmö',nameAlt:'Malmo',country:'Suède',lat:55.60,lon:13.00,dlc:'scandi',cap:false},
+  {name:'Nynäshamn',nameAlt:'Nynashamn',country:'Suède',lat:58.90,lon:17.95,dlc:'scandi',cap:false},
+  {name:'Odense',nameAlt:'Odense',country:'Danemark',lat:55.40,lon:10.38,dlc:'scandi',cap:false},
+  {name:'Örebro',nameAlt:'Orebro',country:'Suède',lat:59.27,lon:15.22,dlc:'scandi',cap:false},
+  {name:'Oslo',nameAlt:'Oslo',country:'Norvège',lat:59.91,lon:10.75,dlc:'scandi',cap:true},
+  {name:'Stavanger',nameAlt:'Stavanger',country:'Norvège',lat:58.97,lon:5.73,dlc:'scandi',cap:false},
+  {name:'Stockholm',nameAlt:'Stockholm',country:'Suède',lat:59.33,lon:18.07,dlc:'scandi',cap:true},
+  {name:'Södertälje',nameAlt:'Sodertalje',country:'Suède',lat:59.19,lon:17.63,dlc:'scandi',cap:false},
+  {name:'Trelleborg',nameAlt:'Trelleborg',country:'Suède',lat:55.38,lon:13.16,dlc:'scandi',cap:false},
+  {name:'Uppsala',nameAlt:'Uppsala',country:'Suède',lat:59.86,lon:17.65,dlc:'scandi',cap:false},
+  {name:'Västerås',nameAlt:'Vasteras',country:'Suède',lat:59.61,lon:16.55,dlc:'scandi',cap:false},
+  {name:'Växjö',nameAlt:'Vaxjo',country:'Suède',lat:56.88,lon:14.81,dlc:'scandi',cap:false},
+  // VIVE LA FRANCE
+  {name:'Ajaccio',nameAlt:'Ajaccio',country:'France',lat:41.92,lon:8.74,dlc:'france',cap:false},
+  {name:'Bastia',nameAlt:'Bastia',country:'France',lat:42.70,lon:9.45,dlc:'france',cap:false},
+  {name:'Bordeaux',nameAlt:'Bordeaux',country:'France',lat:44.84,lon:-0.58,dlc:'france',cap:false},
+  {name:'Bourges',nameAlt:'Bourges',country:'France',lat:47.08,lon:2.40,dlc:'france',cap:false},
+  {name:'Brest',nameAlt:'Brest',country:'France',lat:48.39,lon:-4.49,dlc:'france',cap:false},
+  {name:'Caen',nameAlt:'Caen',country:'France',lat:49.18,lon:-0.37,dlc:'france',cap:false},
+  {name:'Clermont-Ferrand',nameAlt:'Clermont-Ferrand',country:'France',lat:45.78,lon:3.09,dlc:'france',cap:false},
+  {name:'La Rochelle',nameAlt:'La Rochelle',country:'France',lat:46.16,lon:-1.15,dlc:'france',cap:false},
+  {name:'Le Havre',nameAlt:'Le Havre',country:'France',lat:49.49,lon:0.11,dlc:'france',cap:false},
+  {name:'Le Mans',nameAlt:'Le Mans',country:'France',lat:48.00,lon:0.20,dlc:'france',cap:false},
+  {name:'Limoges',nameAlt:'Limoges',country:'France',lat:45.83,lon:1.26,dlc:'france',cap:false},
+  {name:'Marseille',nameAlt:'Marseille',country:'France',lat:43.30,lon:5.37,dlc:'france',cap:false},
+  {name:'Montpellier',nameAlt:'Montpellier',country:'France',lat:43.61,lon:3.88,dlc:'france',cap:false},
+  {name:'Nantes',nameAlt:'Nantes',country:'France',lat:47.22,lon:-1.55,dlc:'france',cap:false},
+  {name:'Nice',nameAlt:'Nice',country:'France',lat:43.70,lon:7.27,dlc:'france',cap:false},
+  {name:'Rennes',nameAlt:'Rennes',country:'France',lat:48.11,lon:-1.68,dlc:'france',cap:false},
+  {name:'Roscoff',nameAlt:'Roscoff',country:'France',lat:48.72,lon:-3.99,dlc:'france',cap:false},
+  {name:'Rouen',nameAlt:'Rouen',country:'France',lat:49.44,lon:1.10,dlc:'france',cap:false},
+  {name:'Toulouse',nameAlt:'Toulouse',country:'France',lat:43.60,lon:1.44,dlc:'france',cap:false},
+  {name:'Tours',nameAlt:'Tours',country:'France',lat:47.39,lon:0.69,dlc:'france',cap:false},
+  {name:'Amiens',nameAlt:'Amiens',country:'France',lat:49.90,lon:2.30,dlc:'france',cap:false},
+  {name:'Grenoble',nameAlt:'Grenoble',country:'France',lat:45.19,lon:5.72,dlc:'france',cap:false},
+  {name:'Perpignan',nameAlt:'Perpignan',country:'France',lat:42.70,lon:2.90,dlc:'france',cap:false},
+  {name:'Troyes',nameAlt:'Troyes',country:'France',lat:48.30,lon:4.08,dlc:'france',cap:false},
+  {name:'Auxerre',nameAlt:'Auxerre',country:'France',lat:47.80,lon:3.57,dlc:'france',cap:false},
+  {name:'Bayonne',nameAlt:'Bayonne',country:'France',lat:43.49,lon:-1.47,dlc:'france',cap:false},
+  {name:'Toulon',nameAlt:'Toulon',country:'France',lat:43.12,lon:5.93,dlc:'france',cap:false},
+  // ITALIA
+  {name:'Ancône',nameAlt:'Ancona',country:'Italie',lat:43.62,lon:13.51,dlc:'italia',cap:false},
+  {name:'Bari',nameAlt:'Bari',country:'Italie',lat:41.12,lon:16.87,dlc:'italia',cap:false},
+  {name:'Bologne',nameAlt:'Bologna',country:'Italie',lat:44.50,lon:11.34,dlc:'italia',cap:false},
+  {name:'Cassino',nameAlt:'Cassino',country:'Italie',lat:41.49,lon:13.83,dlc:'italia',cap:false},
+  {name:'Catane',nameAlt:'Catania',country:'Italie',lat:37.50,lon:15.09,dlc:'italia',cap:false},
+  {name:'Catanzaro',nameAlt:'Catanzaro',country:'Italie',lat:38.91,lon:16.59,dlc:'italia',cap:false},
+  {name:'Florence',nameAlt:'Firenze',country:'Italie',lat:43.77,lon:11.25,dlc:'italia',cap:false},
+  {name:'Livourne',nameAlt:'Livorno',country:'Italie',lat:43.55,lon:10.33,dlc:'italia',cap:false},
+  {name:'Messine',nameAlt:'Messina',country:'Italie',lat:38.19,lon:15.55,dlc:'italia',cap:false},
+  {name:'Naples',nameAlt:'Napoli',country:'Italie',lat:40.85,lon:14.27,dlc:'italia',cap:false},
+  {name:'Palerme',nameAlt:'Palermo',country:'Italie',lat:38.12,lon:13.36,dlc:'italia',cap:false},
+  {name:'Parme',nameAlt:'Parma',country:'Italie',lat:44.80,lon:10.33,dlc:'italia',cap:false},
+  {name:'Pescara',nameAlt:'Pescara',country:'Italie',lat:42.46,lon:14.21,dlc:'italia',cap:false},
+  {name:'Rome',nameAlt:'Roma',country:'Italie',lat:41.90,lon:12.50,dlc:'italia',cap:true},
+  {name:'Suzzara',nameAlt:'Suzzara',country:'Italie',lat:44.99,lon:10.75,dlc:'italia',cap:false},
+  {name:'Tarente',nameAlt:'Taranto',country:'Italie',lat:40.47,lon:17.24,dlc:'italia',cap:false},
+  {name:'Terni',nameAlt:'Terni',country:'Italie',lat:42.56,lon:12.65,dlc:'italia',cap:false},
+  {name:'Villa San Giovanni',nameAlt:'Villa San Giovanni',country:'Italie',lat:38.22,lon:15.64,dlc:'italia',cap:false},
+  // BALTIC SEA
+  {name:'Daugavpils',nameAlt:'Daugavpils',country:'Lettonie',lat:55.87,lon:26.53,dlc:'baltic',cap:false},
+  {name:'Gdynia',nameAlt:'Gdynia',country:'Pologne',lat:54.52,lon:18.53,dlc:'baltic',cap:false},
+  {name:'Helsinki',nameAlt:'Helsinki',country:'Finlande',lat:60.17,lon:24.94,dlc:'baltic',cap:true},
+  {name:'Jelgava',nameAlt:'Jelgava',country:'Lettonie',lat:56.65,lon:23.73,dlc:'baltic',cap:false},
+  {name:'Joensuu',nameAlt:'Joensuu',country:'Finlande',lat:62.60,lon:29.76,dlc:'baltic',cap:false},
+  {name:'Jyväskylä',nameAlt:'Jyvaskyla',country:'Finlande',lat:62.24,lon:25.75,dlc:'baltic',cap:false},
+  {name:'Kaliningrad',nameAlt:'Kaliningrad / Königsberg',country:'Russie',lat:54.71,lon:20.51,dlc:'baltic',cap:false},
+  {name:'Kaunas',nameAlt:'Kaunas',country:'Lituanie',lat:54.90,lon:23.90,dlc:'baltic',cap:false},
+  {name:'Klaipėda',nameAlt:'Klaipeda / Memel',country:'Lituanie',lat:55.71,lon:21.13,dlc:'baltic',cap:false},
+  {name:'Kotka',nameAlt:'Kotka',country:'Finlande',lat:60.47,lon:26.94,dlc:'baltic',cap:false},
+  {name:'Lahti',nameAlt:'Lahti',country:'Finlande',lat:60.98,lon:25.66,dlc:'baltic',cap:false},
+  {name:'Liepāja',nameAlt:'Liepaja / Libau',country:'Lettonie',lat:56.51,lon:21.01,dlc:'baltic',cap:false},
+  {name:'Narva',nameAlt:'Narva',country:'Estonie',lat:59.38,lon:28.19,dlc:'baltic',cap:false},
+  {name:'Pärnu',nameAlt:'Pärnu / Parnu',country:'Estonie',lat:58.39,lon:24.50,dlc:'baltic',cap:false},
+  {name:'Palanga',nameAlt:'Palanga',country:'Lituanie',lat:55.92,lon:21.07,dlc:'baltic',cap:false},
+  {name:'Panevėžys',nameAlt:'Panevezys',country:'Lituanie',lat:55.73,lon:24.36,dlc:'baltic',cap:false},
+  {name:'Riga',nameAlt:'Riga',country:'Lettonie',lat:56.95,lon:24.11,dlc:'baltic',cap:true},
+  {name:'Šiauliai',nameAlt:'Siauliai',country:'Lituanie',lat:55.93,lon:23.31,dlc:'baltic',cap:false},
+  {name:'Tallinn',nameAlt:'Tallinn / Reval',country:'Estonie',lat:59.44,lon:24.75,dlc:'baltic',cap:true},
+  {name:'Tampere',nameAlt:'Tampere',country:'Finlande',lat:61.50,lon:23.77,dlc:'baltic',cap:false},
+  {name:'Tartu',nameAlt:'Tartu / Dorpat',country:'Estonie',lat:58.38,lon:26.72,dlc:'baltic',cap:false},
+  {name:'Turku',nameAlt:'Turku / Åbo',country:'Finlande',lat:60.45,lon:22.27,dlc:'baltic',cap:false},
+  {name:'Ventspils',nameAlt:'Ventspils',country:'Lettonie',lat:57.39,lon:21.56,dlc:'baltic',cap:false},
+  {name:'Vilnius',nameAlt:'Vilnius / Wilno',country:'Lituanie',lat:54.69,lon:25.28,dlc:'baltic',cap:true},
+  {name:'Bydgoszcz',nameAlt:'Bydgoszcz / Bromberg',country:'Pologne',lat:53.12,lon:18.00,dlc:'baltic',cap:false},
+  {name:'Toruń',nameAlt:'Torun / Thorn',country:'Pologne',lat:53.01,lon:18.60,dlc:'baltic',cap:false},
+  {name:'Poznań',nameAlt:'Poznan / Posen',country:'Pologne',lat:52.41,lon:16.93,dlc:'baltic',cap:false},
+  {name:'Szczecin',nameAlt:'Szczecin / Stettin',country:'Pologne',lat:53.43,lon:14.55,dlc:'baltic',cap:false},
+  {name:'Wrocław',nameAlt:'Wroclaw / Breslau',country:'Pologne',lat:51.10,lon:17.03,dlc:'baltic',cap:false},
+  {name:'Rzeszów',nameAlt:'Rzeszow',country:'Pologne',lat:50.04,lon:22.00,dlc:'baltic',cap:false},
+  {name:'Oulu',nameAlt:'Oulu / Uleåborg',country:'Finlande',lat:65.01,lon:25.47,dlc:'baltic',cap:false},
+  {name:'Kouvola',nameAlt:'Kouvola',country:'Finlande',lat:60.87,lon:26.70,dlc:'baltic',cap:false},
+  {name:'Mikkeli',nameAlt:'Mikkeli / S:t Michel',country:'Finlande',lat:61.69,lon:27.27,dlc:'baltic',cap:false},
+  // BLACK SEA
+  {name:'Brașov',nameAlt:'Brasov / Kronstadt',country:'Roumanie',lat:45.65,lon:25.61,dlc:'black',cap:false},
+  {name:'Bucarest',nameAlt:'Bucharest / București',country:'Roumanie',lat:44.43,lon:26.10,dlc:'black',cap:true},
+  {name:'Burgas',nameAlt:'Burgas',country:'Bulgarie',lat:42.51,lon:27.47,dlc:'black',cap:false},
+  {name:'Cluj-Napoca',nameAlt:'Cluj / Klausenburg',country:'Roumanie',lat:46.77,lon:23.59,dlc:'black',cap:false},
+  {name:'Constanța',nameAlt:'Constanta',country:'Roumanie',lat:44.18,lon:28.65,dlc:'black',cap:false},
+  {name:'Craiova',nameAlt:'Craiova',country:'Roumanie',lat:44.32,lon:23.80,dlc:'black',cap:false},
+  {name:'Edirne',nameAlt:'Edirne / Andrinople',country:'Turquie',lat:41.67,lon:26.56,dlc:'black',cap:false},
+  {name:'Galați',nameAlt:'Galati',country:'Roumanie',lat:45.44,lon:28.05,dlc:'black',cap:false},
+  {name:'Iași',nameAlt:'Iasi / Jassy',country:'Roumanie',lat:47.16,lon:27.59,dlc:'black',cap:false},
+  {name:'Istanbul',nameAlt:'Istanbul / Constantinople',country:'Turquie',lat:41.01,lon:28.98,dlc:'black',cap:false},
+  {name:'Pitești',nameAlt:'Pitesti',country:'Roumanie',lat:44.86,lon:24.87,dlc:'black',cap:false},
+  {name:'Ploiești',nameAlt:'Ploiesti',country:'Roumanie',lat:44.94,lon:26.03,dlc:'black',cap:false},
+  {name:'Plovdiv',nameAlt:'Plovdiv / Philippopolis',country:'Bulgarie',lat:42.15,lon:24.75,dlc:'black',cap:false},
+  {name:'Ruse',nameAlt:'Ruse / Roussé',country:'Bulgarie',lat:43.85,lon:25.95,dlc:'black',cap:false},
+  {name:'Sibiu',nameAlt:'Sibiu / Hermannstadt',country:'Roumanie',lat:45.80,lon:24.15,dlc:'black',cap:false},
+  {name:'Silistra',nameAlt:'Silistra',country:'Bulgarie',lat:44.12,lon:27.27,dlc:'black',cap:false},
+  {name:'Sliven',nameAlt:'Sliven',country:'Bulgarie',lat:42.68,lon:26.32,dlc:'black',cap:false},
+  {name:'Sofia',nameAlt:'Sofia / Sofiya',country:'Bulgarie',lat:42.70,lon:23.32,dlc:'black',cap:true},
+  {name:'Stara Zagora',nameAlt:'Stara Zagora',country:'Bulgarie',lat:42.43,lon:25.64,dlc:'black',cap:false},
+  {name:'Tekirdağ',nameAlt:'Tekirdag',country:'Turquie',lat:40.98,lon:27.51,dlc:'black',cap:false},
+  {name:'Timișoara',nameAlt:'Timisoara / Temesvar',country:'Roumanie',lat:45.76,lon:21.23,dlc:'black',cap:false},
+  {name:'Varna',nameAlt:'Varna',country:'Bulgarie',lat:43.22,lon:27.91,dlc:'black',cap:false},
+  {name:'Vidin',nameAlt:'Vidin',country:'Bulgarie',lat:43.99,lon:22.87,dlc:'black',cap:false},
+  {name:'Miskolc',nameAlt:'Miskolc',country:'Hongrie',lat:48.10,lon:20.78,dlc:'black',cap:false},
+  {name:'Pécs',nameAlt:'Pecs',country:'Hongrie',lat:46.08,lon:18.23,dlc:'black',cap:false},
+  {name:'Győr',nameAlt:'Gyor',country:'Hongrie',lat:47.69,lon:17.63,dlc:'black',cap:false},
+  {name:'Brno',nameAlt:'Brno / Brünn',country:'Rép. Tchèque',lat:49.19,lon:16.61,dlc:'black',cap:false},
+  {name:'Plzeň',nameAlt:'Plzen / Pilsen',country:'Rép. Tchèque',lat:49.74,lon:13.38,dlc:'black',cap:false},
+  {name:'Prague',nameAlt:'Praha / Prag',country:'Rép. Tchèque',lat:50.08,lon:14.44,dlc:'black',cap:true},
+  {name:'Liberec',nameAlt:'Liberec / Reichenberg',country:'Rép. Tchèque',lat:50.77,lon:15.06,dlc:'black',cap:false},
+  {name:'Žilina',nameAlt:'Zilina',country:'Slovaquie',lat:49.22,lon:18.74,dlc:'black',cap:false},
+  // IBERIA
+  {name:'La Corogne',nameAlt:'A Coruña / La Coruña',country:'Espagne',lat:43.37,lon:-8.41,dlc:'iberia',cap:false},
+  {name:'Albacete',nameAlt:'Albacete',country:'Espagne',lat:38.99,lon:-1.86,dlc:'iberia',cap:false},
+  {name:'Algésiras',nameAlt:'Algeciras',country:'Espagne',lat:36.14,lon:-5.45,dlc:'iberia',cap:false},
+  {name:'Alicante',nameAlt:'Alicante',country:'Espagne',lat:38.35,lon:-0.49,dlc:'iberia',cap:false},
+  {name:'Almería',nameAlt:'Almeria',country:'Espagne',lat:36.84,lon:-2.46,dlc:'iberia',cap:false},
+  {name:'Badajoz',nameAlt:'Badajoz',country:'Espagne',lat:38.88,lon:-6.97,dlc:'iberia',cap:false},
+  {name:'Barcelone',nameAlt:'Barcelona',country:'Espagne',lat:41.38,lon:2.17,dlc:'iberia',cap:false},
+  {name:'Bilbao',nameAlt:'Bilbao',country:'Espagne',lat:43.26,lon:-2.93,dlc:'iberia',cap:false},
+  {name:'Braga',nameAlt:'Braga',country:'Portugal',lat:41.55,lon:-8.43,dlc:'iberia',cap:false},
+  {name:'Burgos',nameAlt:'Burgos',country:'Espagne',lat:42.34,lon:-3.70,dlc:'iberia',cap:false},
+  {name:'Cáceres',nameAlt:'Caceres',country:'Espagne',lat:39.47,lon:-6.37,dlc:'iberia',cap:false},
+  {name:'Cadix',nameAlt:'Cádiz / Cadiz',country:'Espagne',lat:36.53,lon:-6.30,dlc:'iberia',cap:false},
+  {name:'Castellón',nameAlt:'Castellon',country:'Espagne',lat:39.99,lon:-0.05,dlc:'iberia',cap:false},
+  {name:'Coimbra',nameAlt:'Coimbra',country:'Portugal',lat:40.21,lon:-8.43,dlc:'iberia',cap:false},
+  {name:'Cordoue',nameAlt:'Córdoba / Cordoba',country:'Espagne',lat:37.89,lon:-4.78,dlc:'iberia',cap:false},
+  {name:'Évora',nameAlt:'Evora',country:'Portugal',lat:38.57,lon:-7.91,dlc:'iberia',cap:false},
+  {name:'Faro',nameAlt:'Faro',country:'Portugal',lat:37.02,lon:-7.93,dlc:'iberia',cap:false},
+  {name:'Gijón',nameAlt:'Gijon',country:'Espagne',lat:43.54,lon:-5.66,dlc:'iberia',cap:false},
+  {name:'Grenade',nameAlt:'Granada',country:'Espagne',lat:37.18,lon:-3.60,dlc:'iberia',cap:false},
+  {name:'Guadalajara',nameAlt:'Guadalajara',country:'Espagne',lat:40.63,lon:-3.17,dlc:'iberia',cap:false},
+  {name:'Huelva',nameAlt:'Huelva',country:'Espagne',lat:37.26,lon:-6.95,dlc:'iberia',cap:false},
+  {name:'Léon',nameAlt:'León / Leon',country:'Espagne',lat:42.60,lon:-5.57,dlc:'iberia',cap:false},
+  {name:'Lisbonne',nameAlt:'Lisbon / Lisboa',country:'Portugal',lat:38.72,lon:-9.14,dlc:'iberia',cap:true},
+  {name:'Logroño',nameAlt:'Logrono',country:'Espagne',lat:42.47,lon:-2.45,dlc:'iberia',cap:false},
+  {name:'Lugo',nameAlt:'Lugo',country:'Espagne',lat:43.01,lon:-7.56,dlc:'iberia',cap:false},
+  {name:'Madrid',nameAlt:'Madrid',country:'Espagne',lat:40.42,lon:-3.70,dlc:'iberia',cap:true},
+  {name:'Malaga',nameAlt:'Málaga / Malaga',country:'Espagne',lat:36.72,lon:-4.42,dlc:'iberia',cap:false},
+  {name:'Murcie',nameAlt:'Murcia',country:'Espagne',lat:37.99,lon:-1.13,dlc:'iberia',cap:false},
+  {name:'Ourense',nameAlt:'Ourense',country:'Espagne',lat:42.34,lon:-7.86,dlc:'iberia',cap:false},
+  {name:'Oviedo',nameAlt:'Oviedo',country:'Espagne',lat:43.36,lon:-5.85,dlc:'iberia',cap:false},
+  {name:'Palma',nameAlt:'Palma de Majorque',country:'Espagne',lat:39.57,lon:2.65,dlc:'iberia',cap:false},
+  {name:'Pampelune',nameAlt:'Pamplona',country:'Espagne',lat:42.82,lon:-1.64,dlc:'iberia',cap:false},
+  {name:'Porto',nameAlt:'Porto / Oporto',country:'Portugal',lat:41.16,lon:-8.63,dlc:'iberia',cap:false},
+  {name:'Salamanque',nameAlt:'Salamanca',country:'Espagne',lat:40.97,lon:-5.66,dlc:'iberia',cap:false},
+  {name:'Saint-Sébastien',nameAlt:'San Sebastián / Donostia',country:'Espagne',lat:43.32,lon:-1.98,dlc:'iberia',cap:false},
+  {name:'Santander',nameAlt:'Santander',country:'Espagne',lat:43.46,lon:-3.81,dlc:'iberia',cap:false},
+  {name:'Setúbal',nameAlt:'Setubal',country:'Portugal',lat:38.52,lon:-8.90,dlc:'iberia',cap:false},
+  {name:'Séville',nameAlt:'Seville / Sevilla',country:'Espagne',lat:37.38,lon:-5.99,dlc:'iberia',cap:false},
+  {name:'Tarragone',nameAlt:'Tarragona',country:'Espagne',lat:41.12,lon:1.25,dlc:'iberia',cap:false},
+  {name:'Tolède',nameAlt:'Toledo',country:'Espagne',lat:39.86,lon:-4.02,dlc:'iberia',cap:false},
+  {name:'Valence',nameAlt:'Valencia',country:'Espagne',lat:39.47,lon:-0.38,dlc:'iberia',cap:false},
+  {name:'Valladolid',nameAlt:'Valladolid',country:'Espagne',lat:41.65,lon:-4.73,dlc:'iberia',cap:false},
+  {name:'Vigo',nameAlt:'Vigo',country:'Espagne',lat:42.23,lon:-8.72,dlc:'iberia',cap:false},
+  {name:'Vitoria',nameAlt:'Vitoria-Gasteiz',country:'Espagne',lat:42.85,lon:-2.67,dlc:'iberia',cap:false},
+  {name:'Saragosse',nameAlt:'Zaragoza',country:'Espagne',lat:41.65,lon:-0.88,dlc:'iberia',cap:false},
+  {name:'Zamora',nameAlt:'Zamora',country:'Espagne',lat:41.50,lon:-5.74,dlc:'iberia',cap:false},
+  {name:'Ciudad Real',nameAlt:'Ciudad Real',country:'Espagne',lat:38.99,lon:-3.93,dlc:'iberia',cap:false},
+  {name:'Cuenca',nameAlt:'Cuenca',country:'Espagne',lat:40.07,lon:-2.13,dlc:'iberia',cap:false},
+  {name:'Teruel',nameAlt:'Teruel',country:'Espagne',lat:40.35,lon:-1.11,dlc:'iberia',cap:false},
+  {name:'Huesca',nameAlt:'Huesca',country:'Espagne',lat:42.14,lon:-0.41,dlc:'iberia',cap:false},
+  {name:'Almaraz',nameAlt:'Almaraz',country:'Espagne',lat:39.81,lon:-5.70,dlc:'iberia',cap:false},
+  {name:'Bailén',nameAlt:'Bailen',country:'Espagne',lat:38.09,lon:-3.77,dlc:'iberia',cap:false},
+  // WEST BALKANS
+  {name:'Bar',nameAlt:'Bar',country:'Monténégro',lat:42.10,lon:19.10,dlc:'balkans',cap:false},
+  {name:'Banja Luka',nameAlt:'Banja Luka',country:'Bosnie-Herzégovine',lat:44.77,lon:17.19,dlc:'balkans',cap:false},
+  {name:'Belgrade',nameAlt:'Beograd',country:'Serbie',lat:44.82,lon:20.46,dlc:'balkans',cap:true},
+  {name:'Bitola',nameAlt:'Bitola / Monastir',country:'Macédoine du N.',lat:41.03,lon:21.34,dlc:'balkans',cap:false},
+  {name:'Durrës',nameAlt:'Durres / Durazzo',country:'Albanie',lat:41.32,lon:19.46,dlc:'balkans',cap:false},
+  {name:'Elbasan',nameAlt:'Elbasan',country:'Albanie',lat:41.11,lon:20.08,dlc:'balkans',cap:false},
+  {name:'Fier',nameAlt:'Fier',country:'Albanie',lat:40.72,lon:19.56,dlc:'balkans',cap:false},
+  {name:'Giurgiu',nameAlt:'Giurgiu',country:'Roumanie',lat:43.90,lon:25.97,dlc:'balkans',cap:false},
+  {name:'Igoumenitsa',nameAlt:'Igoumenitsa',country:'Grèce',lat:39.51,lon:20.27,dlc:'balkans',cap:false},
+  {name:'Korçë',nameAlt:'Korce / Koritsa',country:'Albanie',lat:40.62,lon:20.78,dlc:'balkans',cap:false},
+  {name:'Kragujevac',nameAlt:'Kragujevac',country:'Serbie',lat:44.01,lon:20.93,dlc:'balkans',cap:false},
+  {name:'Ljubljana',nameAlt:'Ljubljana / Laibach',country:'Slovénie',lat:46.05,lon:14.51,dlc:'balkans',cap:true},
+  {name:'Maribor',nameAlt:'Maribor',country:'Slovénie',lat:46.56,lon:15.65,dlc:'balkans',cap:false},
+  {name:'Mostar',nameAlt:'Mostar',country:'Bosnie-Herzégovine',lat:43.34,lon:17.81,dlc:'balkans',cap:false},
+  {name:'Niš',nameAlt:'Nis / Nisch',country:'Serbie',lat:43.32,lon:21.90,dlc:'balkans',cap:false},
+  {name:'Novi Sad',nameAlt:'Novi Sad',country:'Serbie',lat:45.26,lon:19.83,dlc:'balkans',cap:false},
+  {name:'Ohrid',nameAlt:'Ohrid',country:'Macédoine du N.',lat:41.12,lon:20.80,dlc:'balkans',cap:false},
+  {name:'Osijek',nameAlt:'Osijek',country:'Croatie',lat:45.55,lon:18.69,dlc:'balkans',cap:false},
+  {name:'Podgorica',nameAlt:'Podgorica',country:'Monténégro',lat:42.44,lon:19.26,dlc:'balkans',cap:true},
+  {name:'Pristina',nameAlt:'Pristina / Prishtina',country:'Kosovo',lat:42.67,lon:21.17,dlc:'balkans',cap:true},
+  {name:'Rijeka',nameAlt:'Rijeka / Fiume',country:'Croatie',lat:45.33,lon:14.44,dlc:'balkans',cap:false},
+  {name:'Sarajevo',nameAlt:'Sarajevo',country:'Bosnie-Herzégovine',lat:43.85,lon:18.38,dlc:'balkans',cap:true},
+  {name:'Shkodër',nameAlt:'Shkoder / Scutari',country:'Albanie',lat:42.07,lon:19.51,dlc:'balkans',cap:false},
+  {name:'Skopje',nameAlt:'Skopje / Üsküp',country:'Macédoine du N.',lat:41.99,lon:21.43,dlc:'balkans',cap:true},
+  {name:'Split',nameAlt:'Split / Spalato',country:'Croatie',lat:43.51,lon:16.44,dlc:'balkans',cap:false},
+  {name:'Subotica',nameAlt:'Subotica',country:'Serbie',lat:46.10,lon:19.67,dlc:'balkans',cap:false},
+  {name:'Tirana',nameAlt:'Tirana / Tiranë',country:'Albanie',lat:41.33,lon:19.82,dlc:'balkans',cap:true},
+  {name:'Vlorë',nameAlt:'Vlore / Valona',country:'Albanie',lat:40.46,lon:19.48,dlc:'balkans',cap:false},
+  {name:'Zagreb',nameAlt:'Zagreb / Agram',country:'Croatie',lat:45.81,lon:15.98,dlc:'balkans',cap:true},
+  {name:'Zadar',nameAlt:'Zadar / Zara',country:'Croatie',lat:44.12,lon:15.23,dlc:'balkans',cap:false},
+  // GREECE
+  {name:'Alexandroupolis',nameAlt:'Alexandroupolis',country:'Grèce',lat:40.85,lon:25.87,dlc:'greece',cap:false},
+  {name:'Athènes',nameAlt:'Athens / Athína',country:'Grèce',lat:37.98,lon:23.73,dlc:'greece',cap:true},
+  {name:'Héraklion',nameAlt:'Heraklion / Candie',country:'Grèce',lat:35.34,lon:25.14,dlc:'greece',cap:false},
+  {name:'Ioannina',nameAlt:'Ioannina',country:'Grèce',lat:39.67,lon:20.85,dlc:'greece',cap:false},
+  {name:'Kalamata',nameAlt:'Kalamata',country:'Grèce',lat:37.04,lon:22.11,dlc:'greece',cap:false},
+  {name:'Kavala',nameAlt:'Kavala',country:'Grèce',lat:40.94,lon:24.41,dlc:'greece',cap:false},
+  {name:'Larissa',nameAlt:'Larissa / Larisa',country:'Grèce',lat:39.64,lon:22.42,dlc:'greece',cap:false},
+  {name:'Patras',nameAlt:'Patras / Patra',country:'Grèce',lat:38.25,lon:21.73,dlc:'greece',cap:false},
+  {name:'Thessalonique',nameAlt:'Thessaloniki / Salonique',country:'Grèce',lat:40.64,lon:22.94,dlc:'greece',cap:false},
+  {name:'Tripoli',nameAlt:'Tripoli',country:'Grèce',lat:37.51,lon:22.38,dlc:'greece',cap:false},
+  {name:'Volos',nameAlt:'Volos',country:'Grèce',lat:39.37,lon:22.94,dlc:'greece',cap:false},
+  {name:'Xanthi',nameAlt:'Xanthi',country:'Grèce',lat:41.13,lon:24.89,dlc:'greece',cap:false},
+  {name:'Lamia',nameAlt:'Lamia',country:'Grèce',lat:38.90,lon:22.43,dlc:'greece',cap:false},
+  {name:'Corfou',nameAlt:'Corfu / Kérkyra',country:'Grèce',lat:39.62,lon:19.92,dlc:'greece',cap:false},
+  {name:'La Canée',nameAlt:'Chania / Chaniá',country:'Grèce',lat:35.51,lon:24.02,dlc:'greece',cap:false},
+  // NORDIC HORIZONS
+  {name:'Ålesund',nameAlt:'Alesund',country:'Norvège',lat:62.47,lon:6.15,dlc:'nordic',cap:false},
+  {name:'Alta',nameAlt:'Alta',country:'Norvège',lat:69.97,lon:23.27,dlc:'nordic',cap:false},
+  {name:'Bodø',nameAlt:'Bodo',country:'Norvège',lat:67.28,lon:14.41,dlc:'nordic',cap:false},
+  {name:'Drammen',nameAlt:'Drammen',country:'Norvège',lat:59.74,lon:10.20,dlc:'nordic',cap:false},
+  {name:'Gävle',nameAlt:'Gavle',country:'Suède',lat:60.67,lon:17.14,dlc:'nordic',cap:false},
+  {name:'Haugesund',nameAlt:'Haugesund',country:'Norvège',lat:59.41,lon:5.27,dlc:'nordic',cap:false},
+  {name:'Kautokeino',nameAlt:'Kautokeino',country:'Norvège',lat:68.99,lon:23.05,dlc:'nordic',cap:false},
+  {name:'Kiruna',nameAlt:'Kiruna',country:'Suède',lat:67.86,lon:20.23,dlc:'nordic',cap:false},
+  {name:'Lillehammer',nameAlt:'Lillehammer',country:'Norvège',lat:61.12,lon:10.47,dlc:'nordic',cap:false},
+  {name:'Luleå',nameAlt:'Lulea',country:'Suède',lat:65.58,lon:22.16,dlc:'nordic',cap:false},
+  {name:'Mo i Rana',nameAlt:'Mo i Rana',country:'Norvège',lat:66.31,lon:14.14,dlc:'nordic',cap:false},
+  {name:'Molde',nameAlt:'Molde',country:'Norvège',lat:62.74,lon:7.16,dlc:'nordic',cap:false},
+  {name:'Mosjøen',nameAlt:'Mosjoen',country:'Norvège',lat:65.84,lon:13.19,dlc:'nordic',cap:false},
+  {name:'Narvik',nameAlt:'Narvik',country:'Norvège',lat:68.44,lon:17.43,dlc:'nordic',cap:false},
+  {name:'Norrköping',nameAlt:'Norrkoping',country:'Suède',lat:58.59,lon:16.19,dlc:'nordic',cap:false},
+  {name:'Östersund',nameAlt:'Ostersund',country:'Suède',lat:63.18,lon:14.64,dlc:'nordic',cap:false},
+  {name:'Rovaniemi',nameAlt:'Rovaniemi',country:'Finlande',lat:66.50,lon:25.72,dlc:'nordic',cap:false},
+  {name:'Skellefteå',nameAlt:'Skelleftea',country:'Suède',lat:64.75,lon:20.95,dlc:'nordic',cap:false},
+  {name:'Sundsvall',nameAlt:'Sundsvall',country:'Suède',lat:62.39,lon:17.31,dlc:'nordic',cap:false},
+  {name:'Tromsø',nameAlt:'Tromso',country:'Norvège',lat:69.65,lon:18.96,dlc:'nordic',cap:false},
+  {name:'Trondheim',nameAlt:'Trondheim',country:'Norvège',lat:63.43,lon:10.39,dlc:'nordic',cap:false},
+  {name:'Umeå',nameAlt:'Umea',country:'Suède',lat:63.83,lon:20.26,dlc:'nordic',cap:false},
+  {name:'Hamar',nameAlt:'Hamar',country:'Norvège',lat:60.79,lon:11.07,dlc:'nordic',cap:false},
+  {name:'Falun',nameAlt:'Falun',country:'Suède',lat:60.60,lon:15.63,dlc:'nordic',cap:false},
+  {name:'Borlänge',nameAlt:'Borlange',country:'Suède',lat:60.49,lon:15.43,dlc:'nordic',cap:false},
+  {name:'Kristiansund',nameAlt:'Kristiansund',country:'Norvège',lat:63.11,lon:7.73,dlc:'nordic',cap:false},
+  {name:'Kajaani',nameAlt:'Kajaani',country:'Finlande',lat:64.22,lon:27.73,dlc:'nordic',cap:false},
+  {name:'Kemi',nameAlt:'Kemi',country:'Finlande',lat:65.74,lon:24.56,dlc:'nordic',cap:false},
+  {name:'Kuopio',nameAlt:'Kuopio',country:'Finlande',lat:62.89,lon:27.68,dlc:'nordic',cap:false},
+  {name:'Seinäjoki',nameAlt:'Seinajoki',country:'Finlande',lat:62.79,lon:22.84,dlc:'nordic',cap:false},
+  {name:'Vaasa',nameAlt:'Vaasa / Vasa',country:'Finlande',lat:63.10,lon:21.62,dlc:'nordic',cap:false},
+];
+
+
+// ============================================================
+// PROJECTION — Mercator
+// ============================================================
+const SVG_W=1600, SVG_H=900, LON_MIN=-12, LON_MAX=36, LAT_MIN=33, LAT_MAX=72;
+function merc(lat){return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));}
+const mercMin=merc(LAT_MIN), mercMax=merc(LAT_MAX);
+function proj(lat,lon){
+  return {
+    x:(lon-LON_MIN)/(LON_MAX-LON_MIN)*SVG_W,
+    y:(1-(merc(lat)-mercMin)/(mercMax-mercMin))*SVG_H
+  };
+}
+function polyPath(poly){
+  // poly = array of [lon,lat]
+  return poly.map((p,i)=>{
+    const {x,y}=proj(p[1],p[0]);
+    return (i===0?'M':'L')+x.toFixed(1)+' '+y.toFixed(1);
+  }).join(' ')+'Z';
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let scale=1,tx=0,ty=0,isDrag=false,sx,sy,stx,sty;
+const dlcVisible={};Object.keys(DLC).forEach(k=>dlcVisible[k]=true);
+let showBorders=true, showCNames=true;
+const mapArea=document.getElementById('mapArea');
+const svgEl=document.getElementById('map');
+const ttEl=document.getElementById('tooltip');
+let gCountries, gCLabels, gCities;
+
+// ============================================================
+// BUILD
+// ============================================================
+function buildSVG(){
+  svgEl.innerHTML='';
+  svgEl.setAttribute('viewBox',`0 0 ${SVG_W} ${SVG_H}`);
+  svgEl.setAttribute('preserveAspectRatio','xMidYMid meet');
+  svgEl.appendChild(mk('rect',{width:SVG_W,height:SVG_H,fill:'#080d12'}));
+
+  // Grid
+  const grid=mk('g',{});
+  for(let lon=-10;lon<=35;lon+=5){
+    const a=proj(LAT_MIN,lon),b=proj(LAT_MAX,lon);
+    grid.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'#0e1a26','stroke-width':0.6}));
+  }
+  for(let lat=35;lat<=70;lat+=5){
+    const a=proj(lat,LON_MIN),b=proj(lat,LON_MAX);
+    grid.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'#0e1a26','stroke-width':0.6}));
+  }
+  svgEl.appendChild(grid);
+
+  // Country shapes
+  gCountries=mk('g',{id:'gCountries'});
+  svgEl.appendChild(gCountries);
+
+  // Country labels
+  gCLabels=mk('g',{id:'gCLabels'});
+  svgEl.appendChild(gCLabels);
+
+  Object.entries(COUNTRIES).forEach(([key,cdata])=>{
+    // Draw all polygons for this country
+    cdata.polys.forEach(poly=>{
+      const path=mk('path',{
+        d:polyPath(poly),
+        fill:'rgba(255,255,255,0.04)',
+        stroke:'rgba(255,255,255,0.35)',
+        'stroke-width':0.8,
+        'stroke-linejoin':'round',
+        class:'country-shape'
+      });
+      gCountries.appendChild(path);
+    });
+
+    // Country label
+    const lp=proj(cdata.lLat, cdata.lLon);
+    const lbl=mk('text',{
+      x:lp.x, y:lp.y,
+      'font-size':11,
+      class:'country-label',
+      stroke:'rgba(0,0,0,0.7)',
+      'stroke-width':3,
+      'stroke-linejoin':'round',
+      'paint-order':'stroke fill'
+    });
+    lbl.textContent=cdata.fr;
+    gCLabels.appendChild(lbl);
+  });
+
+  // Cities
+  gCities=mk('g',{id:'gCities'});
+  svgEl.appendChild(gCities);
+
+  cities.forEach((city,i)=>{
+    const p=proj(city.lat,city.lon);
+    const col=DLC[city.dlc].color;
+    const r=city.cap?5:3;
+    const g=mk('g',{class:'city-g','data-idx':i});
+    g.style.display=dlcVisible[city.dlc]?'':'none';
+
+    g.appendChild(mk('circle',{cx:p.x,cy:p.y,r,fill:col,class:'cdot',
+      stroke:city.cap?'#fff':col,'stroke-width':city.cap?1.5:0,opacity:0.9}));
+
+    const fs=city.cap?11:9;
+    const txt=mk('text',{x:p.x+r+2,y:p.y+4,'font-size':fs,fill:col,
+      stroke:'#080d12','stroke-width':2.5,'stroke-linejoin':'round',
+      class:'clabel','data-dlc':city.dlc,'paint-order':'stroke fill',
+      'font-weight':city.cap?'700':'600'});
+    txt.textContent=city.name;
+    g.appendChild(txt);
+
+    g.addEventListener('mouseenter',e=>showTT(e,city,col));
+    g.addEventListener('mouseleave',hideTT);
+    g.addEventListener('click',e=>{e.stopPropagation();showTT(e,city,col);});
+    gCities.appendChild(g);
+  });
+
+  applyTransform();
+}
+
+function mk(tag,attrs){
+  const el=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+  return el;
+}
+
+// ============================================================
+// TRANSFORM
+// ============================================================
+function applyTransform(){
+  const t=`translate(${tx},${ty}) scale(${scale})`;
+  gCountries.setAttribute('transform',t);
+  gCLabels.setAttribute('transform',t);
+  gCities.setAttribute('transform',t);
+  document.getElementById('zlevel').textContent=`Zoom: ${scale.toFixed(1)}×`;
+  adaptScale();
+}
+
+function adaptScale(){
+  // Dots
+  svgEl.querySelectorAll('.cdot').forEach(c=>{
+    const base=c.getAttribute('stroke')==='#fff'?5:3;
+    c.setAttribute('r', base/Math.max(scale,0.5));
+  });
+  // City labels
+  svgEl.querySelectorAll('.clabel').forEach(t=>{
+    const base=t.closest('.city-g').querySelector('.cdot').getAttribute('stroke')==='#fff'?11:9;
+    t.setAttribute('font-size', Math.max(5,base/Math.max(scale,0.5)));
+    t.setAttribute('stroke-width', 2.5/Math.max(scale,0.5));
+  });
+  // Country borders
+  svgEl.querySelectorAll('.country-shape').forEach(p=>{
+    p.setAttribute('stroke-width', 0.8/Math.max(scale,0.5));
+  });
+  // Country labels
+  svgEl.querySelectorAll('.country-label').forEach(t=>{
+    t.setAttribute('font-size', Math.max(7,11/Math.max(scale,0.5)));
+    t.setAttribute('stroke-width', 3/Math.max(scale,0.5));
+  });
+}
+
+// ============================================================
+// PAN / ZOOM
+// ============================================================
+mapArea.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=mapArea.getBoundingClientRect();
+  const scX=SVG_W/rect.width, scY=SVG_H/rect.height;
+  const mx=(e.clientX-rect.left)*scX, my=(e.clientY-rect.top)*scY;
+  const d=e.deltaY<0?1.15:0.87;
+  const ns=Math.min(14,Math.max(0.4,scale*d));
+  tx=mx-(mx-tx)*(ns/scale); ty=my-(my-ty)*(ns/scale); scale=ns;
+  applyTransform();
+},{passive:false});
+
+mapArea.addEventListener('mousedown',e=>{
+  isDrag=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty;
+  mapArea.classList.add('drag');
+});
+document.addEventListener('mousemove',e=>{
+  if(!isDrag)return;
+  const rect=mapArea.getBoundingClientRect();
+  tx=stx+(e.clientX-sx)*(SVG_W/rect.width);
+  ty=sty+(e.clientY-sy)*(SVG_H/rect.height);
+  applyTransform();
+});
+document.addEventListener('mouseup',()=>{isDrag=false;mapArea.classList.remove('drag');});
+document.getElementById('zIn').onclick=()=>{scale=Math.min(14,scale*1.3);applyTransform();};
+document.getElementById('zOut').onclick=()=>{scale=Math.max(0.4,scale/1.3);applyTransform();};
+document.getElementById('zReset').onclick=()=>{scale=1;tx=0;ty=0;applyTransform();};
+
+// ============================================================
+// TOGGLE BUTTONS
+// ============================================================
+document.getElementById('btnBorders').addEventListener('click',function(){
+  showBorders=!showBorders;
+  this.classList.toggle('active',showBorders);
+  gCountries.style.display=showBorders?'':'none';
+});
+document.getElementById('btnCountryNames').addEventListener('click',function(){
+  showCNames=!showCNames;
+  this.classList.toggle('active',showCNames);
+  gCLabels.style.display=showCNames?'':'none';
+});
+
+// ============================================================
+// TOOLTIP
+// ============================================================
+function showTT(e,city,col){
+  const hasAlt=city.nameAlt&&city.nameAlt!==city.name;
+  ttEl.innerHTML=`
+    <div class="tt-name" style="color:${col}">${city.name}</div>
+    ${hasAlt?`<div class="tt-alt">${city.nameAlt}</div>`:''}
+    <div style="color:#8ab0c8">${city.country}</div>
+    <div class="tt-dlc" style="color:${col}">${DLC[city.dlc].label}</div>
+    ${city.cap?'<div style="color:#ffcc44;font-size:.7rem">★ Capitale</div>':''}
+  `;
+  ttEl.style.display='block';
+  moveTT(e);
+}
+function hideTT(){ttEl.style.display='none';}
+function moveTT(e){
+  let x=e.clientX+14,y=e.clientY-36;
+  if(x+240>window.innerWidth)x=e.clientX-255;
+  if(y<0)y=e.clientY+10;
+  ttEl.style.left=x+'px';ttEl.style.top=y+'px';
+}
+mapArea.addEventListener('mousemove',e=>{if(ttEl.style.display==='block')moveTT(e);});
+
+// ============================================================
+// LEGEND
+// ============================================================
+const legendWrap=document.getElementById('legend');
+Object.entries(DLC).forEach(([key,dlc])=>{
+  const el=document.createElement('div');
+  el.className='leg'; el.dataset.key=key;
+  el.innerHTML=`<div class="leg-dot" style="background:${dlc.color}"></div><span>${dlc.label}</span>`;
+  el.addEventListener('click',()=>{
+    dlcVisible[key]=!dlcVisible[key];
+    el.classList.toggle('off',!dlcVisible[key]);
+    svgEl.querySelectorAll('.city-g').forEach(g=>{
+      if(cities[+g.dataset.idx].dlc===key)g.style.display=dlcVisible[key]?'':'none';
+    });
+  });
+  legendWrap.appendChild(el);
+});
+
+// ============================================================
+// SEARCH
+// ============================================================
+const searchBox=document.getElementById('searchBox');
+const searchRes=document.getElementById('searchResults');
+
+function norm(s){
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,'');
+}
+searchBox.addEventListener('input',()=>{
+  const q=norm(searchBox.value.trim());
+  if(!q){searchRes.style.display='none';return;}
+  const matches=cities.filter(c=>norm(c.name).includes(q)||norm(c.nameAlt).includes(q)||norm(c.country).includes(q)).slice(0,25);
+  if(!matches.length){searchRes.style.display='none';return;}
+  searchRes.innerHTML='';
+  matches.forEach(c=>{
+    const d=document.createElement('div');d.className='sr-item';
+    const col=DLC[c.dlc].color;
+    const hasAlt=c.nameAlt&&c.nameAlt!==c.name;
+    d.innerHTML=`<div class="sr-dot" style="background:${col}"></div>
+      <div class="sr-main">
+        <span class="sr-name">${c.name}</span>
+        ${hasAlt?`<span class="sr-alt">${c.nameAlt}</span>`:''}
+        <span class="sr-meta">${c.country} · ${DLC[c.dlc].label}</span>
+      </div>`;
+    d.addEventListener('click',()=>{flyTo(c);searchRes.style.display='none';searchBox.value='';});
+    searchRes.appendChild(d);
+  });
+  searchRes.style.display='block';
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))searchRes.style.display='none';});
+
+function flyTo(city){
+  const p=proj(city.lat,city.lon);
+  const rect=mapArea.getBoundingClientRect();
+  scale=5;
+  tx=(rect.width/2)*(SVG_W/rect.width)-p.x*scale;
+  ty=(rect.height/2)*(SVG_H/rect.height)-p.y*scale;
+  applyTransform();
+}
+
+document.getElementById('counter').textContent=`${cities.length} villes`;
+buildSVG();
+</script>
+</body>
+</html>
